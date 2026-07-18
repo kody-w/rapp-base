@@ -4,7 +4,7 @@ on:
   issues:
     types: [opened]
   schedule:
-    - cron: "17,47 * * * *"
+    - cron: "17 */6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -30,12 +30,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - name: Reconcile, validate, and push
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PYTHONDONTWRITEBYTECODE: "1"
+          REQUIRE_NODE: "1"
         shell: bash
         run: |
           set -euo pipefail
@@ -48,10 +49,16 @@ jobs:
             git reset --hard origin/main
             git clean -fd -- .work state api versions registry.json
             mkdir -p .work
-            python3 scripts/fetch_issues.py --output .work/issues.json
+            event_args=()
+            if [[ "${GITHUB_EVENT_NAME}" == "issues" ]]; then
+              event_args=(--event "${GITHUB_EVENT_PATH}")
+            fi
+            python3 scripts/fetch_issues.py \
+              --output .work/issues.json "${event_args[@]}"
             python3 scripts/reconcile.py --input .work/issues.json
             rm -rf .work
             python3 scripts/build.py
+            python3 scripts/check_monotonic.py --base origin/main
             make check
             git add -A -- state api versions registry.json
             if git diff --cached --quiet; then

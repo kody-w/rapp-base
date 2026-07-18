@@ -108,6 +108,31 @@ class HardeningTests(unittest.TestCase):
                 lambda: replay(root, load_manifest(root)),
             )
 
+    def test_rejected_admission_locks_genesis_even_without_events(self):
+        for retained in ("request", "receipt"):
+            with self.subTest(retained=retained), repository() as root:
+                rejected = issue(107, "{malformed", fenced=False)
+                reconcile(root, [rejected])
+                self.assertEqual(len(replay(root, load_manifest(root)).events), 0)
+                if retained == "request":
+                    (
+                        root
+                        / f"state/receipts/issue-{rejected['id']}.json"
+                    ).unlink()
+                else:
+                    (
+                        root
+                        / f"state/requests/issue-{rejected['id']}.json"
+                    ).unlink()
+                path = root / "manifest.json"
+                value = json.loads(path.read_text())
+                value["collections"][1]["fields"]["title"]["maxLength"] = 121
+                path.write_bytes(canonical_bytes(value))
+                self.assertCode(
+                    "migration_required",
+                    lambda: replay(root, load_manifest(root)),
+                )
+
     def test_policy_description_and_safe_limit_changes_do_not_reinterpret_events(self):
         with repository() as root:
             routed = issue(105, create_command(105))
@@ -166,6 +191,191 @@ class HardeningTests(unittest.TestCase):
             self.assertEqual(load_receipt(root, good)["status"], "applied")
             self.assertEqual(len(load_requests(root, load_manifest(root))), 7)
             build(root, load_manifest(root))
+
+    def test_invalid_admissions_retain_hashes_but_no_submitted_text(self):
+        with repository() as root:
+            duplicate = (
+                '{"schema":"rapp-base-command/1.0",'
+                f'"command_id":"{command_id(117)}","operation":"create",'
+                '"collection":"resources",'
+                '"data":{"marker":"DUPLICATE_SENTINEL"},'
+                '"data":{}}'
+            )
+            oversized_command = create_command(
+                118,
+                data={
+                    **resource_data(118),
+                    "summary": "OVERSIZED_SENTINEL" + ("x" * 17_000),
+                },
+            )
+            oversized = json.dumps(
+                oversized_command, ensure_ascii=False, separators=(",", ":")
+            )
+            malformed = '{"marker":"MALFORMED_SENTINEL"'
+            excessive_command = create_command(
+                119,
+                data={
+                    **resource_data(119, title="EXCESSIVE_SENTINEL"),
+                    "rating": 9_007_199_254_740_992,
+                },
+            )
+            control_command = create_command(
+                121,
+                data={
+                    **resource_data(121),
+                    "summary": "CONTROL_SENTINEL\u0001",
+                },
+            )
+            values = [
+                (issue(117, duplicate), "DUPLICATE_SENTINEL", "duplicate_key"),
+                (issue(118, oversized), "OVERSIZED_SENTINEL", "command_too_large"),
+                (issue(119, malformed), "MALFORMED_SENTINEL", "invalid_json"),
+                (
+                    issue(120, excessive_command),
+                    "EXCESSIVE_SENTINEL",
+                    "number_out_of_range",
+                ),
+                (
+                    issue(121, control_command),
+                    "CONTROL_SENTINEL",
+                    "control_character",
+                ),
+            ]
+            reconcile(root, [value[0] for value in values])
+            for submitted, sentinel, code in values:
+                with self.subTest(code=code):
+                    request_path = (
+                        root / f"state/requests/issue-{submitted['id']}.json"
+                    )
+                    raw = request_path.read_bytes()
+                    request = json.loads(raw)
+                    self.assertNotIn(sentinel.encode(), raw)
+                    self.assertIsNone(request["command"])
+                    self.assertIsNone(request["command_text"])
+                    self.assertRegex(request["body_sha256"], r"^[0-9a-f]{64}$")
+                    self.assertRegex(request["command_sha256"], r"^[0-9a-f]{64}$")
+                    self.assertEqual(request["parse_error"]["code"], code)
+                    self.assertEqual(load_receipt(root, submitted)["code"], code)
+            manifest = load_manifest(root)
+            build(root, manifest)
+            self.assertEqual(build(root, manifest)["changed"], 0)
+
+    def test_hash_only_command_snapshot_uses_original_byte_limit(self):
+        with repository() as root:
+            manifest = load_manifest(root)
+            limit = manifest["limits"]["command_bytes"]
+            number_tokens = ",".join(["1e-7"] * 50)
+            prefix = (
+                '{"schema":"rapp-base-command/1.0",'
+                f'"command_id":"{command_id(122)}","operation":"create",'
+                '"collection":"resources","data":{"numbers":['
+                f'{number_tokens}],"padding":["'
+                + ('x' * 4000)
+                + '","'
+                + ('x' * 4000)
+                + '","'
+                + ('x' * 4000)
+                + '","'
+            )
+            suffix = '"]}}'
+            remaining = limit - 25 - len(prefix.encode()) - len(suffix.encode())
+            self.assertGreaterEqual(remaining, 0)
+            self.assertLessEqual(remaining, manifest["limits"]["string_bytes"])
+            command_text = prefix + ("x" * remaining) + suffix
+            self.assertLessEqual(len(command_text.encode()), limit)
+
+            submitted = issue(122, command_text)
+            reconcile(root, [submitted])
+            self.assertEqual(load_receipt(root, submitted)["code"], "unknown_field")
+            request = json.loads(
+                (
+                    root
+                    / f"state/requests/issue-{submitted['id']}.json"
+                ).read_text()
+            )
+            self.assertIsNone(request["command_text"])
+            self.assertGreater(
+                len(canonical_bytes(request["command"])) - 1,
+                limit,
+            )
+            build(root, manifest)
+
+    def test_active_record_capacity_is_reusable_but_event_capacity_is_lifetime(self):
+        with repository() as root:
+            path = root / "manifest.json"
+            manifest_value = json.loads(path.read_text())
+            manifest_value["limits"]["records_per_collection"] = 3
+            manifest_value["limits"]["snapshot_items"] = 3
+            path.write_bytes(canonical_bytes(manifest_value))
+
+            created_issue = issue(140, create_command(140))
+            reconcile(root, [created_issue])
+            created = load_receipt(root, created_issue)
+            deletion = issue(
+                141,
+                {
+                    "schema": "rapp-base-command/1.0",
+                    "command_id": command_id(141),
+                    "operation": "delete",
+                    "collection": "resources",
+                    "record_id": created["record"]["id"],
+                    "if_revision": created["record"]["revision"],
+                },
+            )
+            reconcile(root, [deletion])
+            replacement = issue(142, create_command(142))
+            reconcile(root, [replacement])
+            self.assertEqual(load_receipt(root, replacement)["status"], "applied")
+
+            build(root, load_manifest(root))
+            status = json.loads((root / "api/v1/status.json").read_text())
+            registry = json.loads((root / "registry.json").read_text())
+            resources = next(
+                item for item in registry["collections"] if item["name"] == "resources"
+            )
+            self.assertEqual(
+                resources["counts"],
+                {"active": 3, "lifetime": 4, "tombstones": 1},
+            )
+            self.assertEqual(resources["capacity"]["remaining_active_slots"], 0)
+            self.assertEqual(status["capacity"]["events"]["used"], 3)
+            self.assertEqual(status["capacity"]["requests"]["used"], 3)
+            self.assertEqual(
+                status["health"],
+                {
+                    "excludes": ["github", "github-actions", "github-pages"],
+                    "healthy": True,
+                    "operational_availability": "not_measured",
+                    "scope": "repository_integrity_only",
+                },
+            )
+            self.assertEqual(registry["health"], status["health"])
+
+        with repository() as root:
+            path = root / "manifest.json"
+            manifest_value = json.loads(path.read_text())
+            manifest_value["limits"]["records_per_collection"] = 3
+            manifest_value["limits"]["snapshot_items"] = 3
+            manifest_value["limits"]["events"] = 2
+            path.write_bytes(canonical_bytes(manifest_value))
+            created_issue = issue(143, create_command(143))
+            reconcile(root, [created_issue])
+            created = load_receipt(root, created_issue)
+            deletion = issue(
+                144,
+                {
+                    "schema": "rapp-base-command/1.0",
+                    "command_id": command_id(144),
+                    "operation": "delete",
+                    "collection": "resources",
+                    "record_id": created["record"]["id"],
+                    "if_revision": created["record"]["revision"],
+                },
+            )
+            reconcile(root, [deletion])
+            blocked = issue(145, create_command(145))
+            reconcile(root, [blocked])
+            self.assertEqual(load_receipt(root, blocked)["code"], "event_limit")
 
     def test_deleted_event_cannot_be_replaced_by_forged_rejection(self):
         with repository() as root:

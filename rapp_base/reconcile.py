@@ -14,6 +14,7 @@ from .commands import (
     normalize_repository,
     parse_command_text,
     request_filename,
+    validate_command_snapshot,
 )
 from .constants import (
     HARD_LIMITS,
@@ -283,12 +284,11 @@ def _validate_request(request: dict[str, Any]) -> None:
             raise RappError("invalid_request", "request parse error is unsafe")
         if re.fullmatch(r"[a-z][a-z0-9_]{0,63}", request["parse_error"]["code"]) is None:
             raise RappError("invalid_request", "request parse error code is invalid")
-        if request["command_text"] is None:
-            if request["command_sha256"] is not None:
-                raise RappError("invalid_request", "request command hash is invalid")
+        if request["command_text"] is not None:
+            raise RappError("invalid_request", "invalid request retains command text")
+        if request["command_sha256"] is None:
             if request["parse_error"]["code"] not in {
                 "body_too_large",
-                "command_too_large",
                 "empty_command",
                 "invalid_body",
                 "invalid_issue_form",
@@ -296,47 +296,63 @@ def _validate_request(request: dict[str, Any]) -> None:
             }:
                 raise RappError("invalid_request", "request extraction error is invalid")
         else:
-            if not isinstance(request["command_text"], str):
-                raise RappError("invalid_request", "request command text is invalid")
             require_hash(request["command_sha256"], "command_sha256")
+        if (
+            request["parse_error"]["code"] not in {
+                "array_too_large",
+                "command_too_large",
+                "control_character",
+                "duplicate_key",
+                "invalid_command_id",
+                "invalid_command_schema",
+                "invalid_command_shape",
+                "invalid_data",
+                "invalid_hash",
+                "invalid_json",
+                "invalid_json_value",
+                "invalid_number",
+                "invalid_operation",
+                "invalid_path",
+                "missing_key",
+                "not_an_object",
+                "number_out_of_range",
+                "reserved_field",
+                "string_too_large",
+                "too_deep",
+                "too_many_keys",
+                "too_many_nodes",
+                "unknown_key",
+            }
+            and request["command_sha256"] is not None
+        ):
+            raise RappError("invalid_request", "request parse error is invalid")
+        if public_error_message(request["parse_error"]["code"]) != request[
+            "parse_error"
+        ]["message"]:
+            raise RappError("invalid_request", "request parse error is not stable")
+    else:
+        if (
+            not isinstance(request["command"], dict)
+            or request["command_sha256"] is None
+        ):
+            raise RappError("invalid_request", "request command snapshot is invalid")
+        require_hash(request["command_sha256"], "command_sha256")
+        if request["command_text"] is None:
+            normalized = validate_command_snapshot(
+                request["command"], request["admission"]["limits"]
+            )
+        elif isinstance(request["command_text"], str):
             if (
                 sha256_bytes(request["command_text"].encode("utf-8"))
                 != request["command_sha256"]
             ):
                 raise RappError("invalid_request", "request command hash does not match")
-            try:
-                parse_command_text(
-                    request["command_text"],
-                    request["admission"]["limits"],
-                )
-            except RappError as exc:
-                if (
-                    exc.code != request["parse_error"]["code"]
-                    or public_error_message(exc.code)
-                    != request["parse_error"]["message"]
-                ):
-                    raise RappError(
-                        "invalid_request", "request parse error does not reproduce"
-                    ) from exc
-            else:
-                raise RappError("invalid_request", "request parse error is invalid")
-    else:
-        if (
-            not isinstance(request["command"], dict)
-            or not isinstance(request["command_text"], str)
-            or request["command_sha256"] is None
-        ):
-            raise RappError("invalid_request", "request command snapshot is invalid")
-        require_hash(request["command_sha256"], "command_sha256")
-        if (
-            sha256_bytes(request["command_text"].encode("utf-8"))
-            != request["command_sha256"]
-        ):
-            raise RappError("invalid_request", "request command hash does not match")
-        if parse_command_text(
-            request["command_text"],
-            request["admission"]["limits"],
-        ) != request["command"]:
+            normalized = parse_command_text(
+                request["command_text"], request["admission"]["limits"]
+            )
+        else:
+            raise RappError("invalid_request", "request command text is invalid")
+        if normalized != request["command"]:
             raise RappError("invalid_request", "request command snapshot does not match")
         if request["parse_error"] is not None:
             raise RappError("invalid_request", "valid request has a parse error")
@@ -602,7 +618,8 @@ def prepare_event(
     operation = command["operation"]
     records = state.records[command["collection"]]
     if operation == "create":
-        if len(records) >= limits["records_per_collection"]:
+        active_records = sum(not record["deleted"] for record in records.values())
+        if active_records >= limits["records_per_collection"]:
             raise RappError("record_limit", "collection record limit reached")
         record_id = deterministic_record_id(
             repository_id=request["repository"]["id"],

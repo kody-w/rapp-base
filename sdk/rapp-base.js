@@ -729,8 +729,8 @@ function cloneJson(
   if (
     typeof value === "number" &&
     Number.isFinite(value) &&
-    (!Number.isInteger(value) || Number.isSafeInteger(value))
-  ) return value;
+    Math.abs(value) <= Number.MAX_SAFE_INTEGER
+  ) return Object.is(value, -0) ? 0 : value;
   if (Array.isArray(value)) {
     if (value.length > limits.array_items) {
       throw new RappBaseError("invalid_data", "array is too large");

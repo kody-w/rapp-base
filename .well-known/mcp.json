@@ -1,6 +1,6 @@
 {
   "schema": "rapp-base-mcp-static-discovery/1.0",
-  "description": "Static resource hints only. RAPP Base does not expose a live MCP server.",
+  "description": "Static resource hints only. RAPP Base does not expose a live MCP server, and repository health does not attest host availability.",
   "servers": [],
   "resources": [
     {

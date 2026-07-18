@@ -3,7 +3,7 @@
   "name": "RAPP Base",
   "profile": "rapp-base/1.0",
   "mode": "resources-only",
-  "description": "Public, bounded static JSON resources with asynchronous GitHub Issue commands.",
+  "description": "Public, bounded static JSON resources with asynchronous GitHub Issue commands; health covers repository integrity, not host availability.",
   "live_agent_server": false,
   "registry": "https://kody-w.github.io/rapp-base/registry.json",
   "resources": [

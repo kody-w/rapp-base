@@ -9,12 +9,41 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  check:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - name: Check out
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Check deterministic Python build
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          make check-python
+          base=""
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            base="$(python3 -c 'import json, os; print(json.load(open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8"))["before"])')"
+          elif [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            base="$(python3 -c 'import json, os; print(json.load(open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8"))["pull_request"]["base"]["sha"])')"
+          elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            base="HEAD^"
+          fi
+          if [[ -n "${base}" && ! "${base}" =~ ^0+$ ]]; then
+            python3 scripts/check_monotonic.py --base "${base}"
+          fi
+
+  node-pages:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -23,8 +52,9 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: "3.12"
-      - name: Check
+          python-version: "3.14"
+      - name: Check Node and Pages
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: make check
+          REQUIRE_NODE: "1"
+        run: make check-node check-pages

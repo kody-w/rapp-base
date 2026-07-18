@@ -309,6 +309,24 @@ test("long commands return a template-only URL and raw field JSON", () => {
   assert.ok(draft.issueUrl.length < 500);
 });
 
+test("prepared commands enforce the portable JSON scalar contract", () => {
+  const client = new RappBase({
+    baseUrl: "https://example.test/",
+    repository: "owner/repo",
+    fetch: async () => response(404, {}),
+  });
+  const collection = client.collection("resources");
+  const options = { commandId: "123e4567-e89b-42d3-a456-426614174099" };
+  const draft = collection.prepareCreate({ rating: -0 }, options);
+  assert.equal(Object.is(draft.command.data.rating, -0), false);
+  assert.throws(
+    () => collection.prepareCreate({ rating: 9_007_199_254_740_992 }, options),
+    (error) => error instanceof RappBaseError && error.code === "invalid_data",
+  );
+  const unicode = collection.prepareCreate({ title: "e\u0301" }, options);
+  assert.equal(unicode.command.data.title, "e\u0301");
+});
+
 test("registry limits replace conservative defaults while overrides win", async () => {
   const registry = {
     schema: "rapp-static-api/1.0",

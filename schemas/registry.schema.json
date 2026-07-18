@@ -19,6 +19,7 @@
     "receipts_url",
     "events_url",
     "versions_url",
+    "health",
     "summary",
     "entries",
     "capabilities",
@@ -71,6 +72,33 @@
     "versions_url": {
       "type": "string",
       "format": "uri"
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "excludes",
+        "healthy",
+        "operational_availability",
+        "scope"
+      ],
+      "properties": {
+        "excludes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "healthy": {
+          "type": "boolean"
+        },
+        "operational_availability": {
+          "const": "not_measured"
+        },
+        "scope": {
+          "const": "repository_integrity_only"
+        }
+      }
     },
     "summary": {
       "type": "object"

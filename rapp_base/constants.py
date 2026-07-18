@@ -83,8 +83,8 @@ PARSER_LIMIT_KEYS = frozenset(
     }
 )
 
-# Immutable request envelopes contain raw command text as a string. They must
-# remain loadable even when that command exceeded its snapshotted parser limits.
+# Legacy valid v1 request envelopes may contain raw command text. Keep those
+# immutable snapshots loadable while new admissions retain hash-only text.
 REQUEST_ENVELOPE_LIMITS = {
     **HARD_LIMITS,
     "json_depth": HARD_LIMITS["json_depth"] + 8,

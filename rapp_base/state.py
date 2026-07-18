@@ -235,7 +235,7 @@ def _load_and_validate_head(
     if head == expected:
         return head
     if head["genesis_sha256"] != expected["genesis_sha256"]:
-        if events:
+        if events or _has_admissions(root):
             raise RappError(
                 "migration_required",
                 "state genesis does not match replay-critical manifest schemas or seeds",
@@ -258,6 +258,19 @@ def _load_and_validate_head(
     if repair:
         return expected
     raise RappError("stale_head", "head lags the authoritative contiguous event ledger")
+
+
+def _has_admissions(root: Path) -> bool:
+    """Check the ledger boundary without importing reconciliation code."""
+
+    return any(
+        any(directory.glob("*.json"))
+        for directory in (
+            root / "state" / "requests",
+            root / "state" / "receipts",
+        )
+        if directory.exists()
+    )
 
 
 def head_for_events(

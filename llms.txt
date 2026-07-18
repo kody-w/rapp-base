@@ -19,5 +19,11 @@ Pages explorer. Write transport: one strict command in a public GitHub Issue.
 Never submit secrets or personal/private data. Deletion publishes a tombstone;
 Git and Issue history remain public.
 
+Status `healthy` means repository-integrity checks passed; GitHub, Actions, and
+Pages availability are not measured. Collection capacity distinguishes active
+slots from tombstones/lifetime history, while event/request limits are
+lifetime bounds. Invalid admissions retain hashes and stable errors, not raw
+rejected command text. Admission ordering is first durable observation.
+
 The `.well-known/mcp.json` document advertises static resources only. There is
 no live MCP, plugin, websocket, or server-side realtime endpoint.

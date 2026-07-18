@@ -30,9 +30,13 @@ as returned by GitHub REST. Identity never comes from a login or command.
 An official request is an open, non-PR Issue whose trusted title starts
 exactly `[RAPP Base]`. Labels are optional taxonomy, not authority. The
 scheduled/manual reconciler searches all such open Issues; every Issue-open
-event starts the processor too. A manually closed Issue not yet admitted may
-be skipped. Terminal state is in Git, so successfully delivered closed Issues
-need not remain in the queue.
+event starts the processor too. On `issues: opened`, the trusted event Issue is
+normalized through the same GitHub adapter, directly included, and
+deduplicated with the recovery scan; strict prefix/open-state routing still
+applies. Manual recovery remains available and scheduled recovery runs every
+six hours. A manually closed Issue not yet admitted may be skipped. Terminal
+state is in Git, so successfully delivered closed Issues need not remain in
+the queue.
 
 The body is either one object or exactly:
 
@@ -55,10 +59,14 @@ non-zero lowercase UUID `command_id`, operation, and collection.
 - update requires `record_id`, full SHA-256 `if_revision`, and partial `data`;
 - delete requires `record_id` and full SHA-256 `if_revision`, and forbids data.
 
-Unknown keys, duplicate keys, non-finite/unsafe numbers, invalid Unicode,
-control characters, path traversal, excessive bytes/depth/nodes/keys/items,
-and reserved system fields fail closed. URL fields are syntax-checked absolute
-HTTPS URLs and are never fetched.
+Unknown keys, duplicate keys, non-finite numbers, numbers outside JavaScript's
+safe-integer magnitude, invalid Unicode strings, control characters,
+path traversal, excessive bytes/depth/nodes/keys/items, and reserved system
+fields fail closed. Parsed negative zero becomes positive zero. URL fields are
+syntax-checked absolute HTTPS URLs and are never fetched. Canonical UTF-8 JSON
+uses sorted keys, compact separators, one trailing LF, exact Unicode code
+points (no runtime-dependent normalization), and stable
+float rendering.
 
 The first admitted command bytes reserve a command ID. Exact-byte reuse is a
 terminal no-op. Different bytes with the same ID are a terminal conflict.
@@ -75,9 +83,11 @@ validated by `schemas/manifest.schema.json` and the engine.
 field schemas, and seeds. Descriptions, policies, and limits are excluded.
 `state/head.json` and every event carry this anchor.
 
-Before the first event, write-mode build deterministically re-anchors a
-customized template. Once any event exists, an incompatible field-schema or
-seed change fails explicitly. RAPP Base v1 defines no schema migration:
+Write-mode build deterministically re-anchors a customized template only while
+events, admitted requests, and receipts are all empty. The first admission,
+including a terminal parse rejection before any event, locks genesis. An
+incompatible field-schema or seed change then returns `migration_required`.
+RAPP Base v1 defines no schema migration:
 operators must start a new API major/repository or add an explicit future
 migration mechanism. Policy, description, and limit changes are valid only
 when snapshotted admissions and the complete immutable history still derive
@@ -86,14 +96,20 @@ the same outcomes.
 ## 5. Admission durability
 
 Each immutable request stores trusted actor/source identity, title, admitted
-time, exact command text/hash when extractable, parse result, and a snapshot of
-the parser profile, configured limits, and applicable policy.
+time, body hash, candidate-command hash when extractable, parse result, and a
+snapshot of the parser profile, configured limits, and applicable policy.
+Invalid admissions retain no raw body/candidate text. Valid admissions retain
+the normalized command and exact submitted-command hash. Legacy valid v1
+requests that already contain command text remain verifiable.
 
 Request envelope loading uses separate compiled structural ceilings. It does
-not parse raw command text under current manifest limits. The command is then
-reproduced under its snapshotted limits, all bounded by compiled hard maxima.
-Consequently over-limit strings, key-heavy/deep values, and malformed bodies
-remain reloadable terminal rejections even if operator limits later change.
+not claim raw bytes are available for a hash-only rejection. Its stable error,
+hashes, parser profile, limits, and envelope hash are the deterministic
+admission evidence. A valid normalized command is revalidated under its
+snapshotted limits; legacy command-text snapshots also reproduce their exact
+hash and parse. Consequently over-limit, duplicate-key, malformed, and
+excessive-value submissions remain reloadable terminal rejections without
+copying rejected content into immutable state.
 
 ## 6. Authorization
 
@@ -123,9 +139,10 @@ schema/uniqueness, and reject stale or value-equivalent changes. Deletes
 produce tombstones and preserve `prior_revision`.
 
 RFC 3339 timestamps are parsed as instants, never compared lexically.
-Admission order is `(created instant, immutable Issue database ID)`.
-Updated/deleted/generated maxima use instant order and deterministic Issue-ID
-ties.
+Admission order is first durable observation: existing sequence numbers never
+move, while `(created instant, immutable Issue database ID)` orders only the
+new Issues in each observed batch. Updated/deleted/generated maxima use instant
+order and deterministic Issue-ID ties.
 
 ## 8. Complete-history verification
 
@@ -150,6 +167,12 @@ A valid contiguous event tail is authoritative. A head that validly references
 an earlier point is stale: write mode repairs it, while `--check` reports it
 without mutation. Ahead or forked heads are never accepted.
 
+Immutable files are fully written and fsynced to unique same-directory staging
+names, then atomically hard-linked into a no-replace target. Directory metadata
+is fsynced on macOS/Linux and safely skipped where Windows does not support
+directory fsync. Publication races retain byte-equality/conflict checks, and
+staging is always removed.
+
 `versions/index.json` records `content_sha256` and `semantic_sha256`.
 `sha8` is RAPP's historical field name for the first **12** characters of the
 SHA-256 of exact stored bytes. Record, request, and collection version
@@ -168,20 +191,36 @@ rewrite of version bytes and index metadata.
 `make build` is the only generation step. `make check` starts with
 `scripts/build.py --check`, runs Python and Node tests, prepares/checks the
 Pages artifact, and runs repository invariants without changing generated
-state.
+state. Repository and Pages inputs reject every symlink, including broken or
+root-escaping links. CI exercises deterministic Python behavior on 3.12, 3.13,
+and 3.14; Node/Pages checks run once.
 
 The processor recomputes from refreshed `origin/main`, builds, checks, commits,
-and fast-forwards state. Receipt delivery is a later, non-blocking step.
+and fast-forwards state. Before commit it runs
+`scripts/check_monotonic.py --base origin/main`; CI compares against the parent
+commit when present. The checker reads base Git objects without checking them
+out and rejects a changed genesis, decreased/forked same-sequence head,
+changed/removed prior request/receipt/event, or changed/removed prior version
+index entry. Code/docs-only and append-only state changes pass. Receipt
+delivery is a later, non-blocking step.
 Before commenting it verifies the exact receipt is reachable on remote main.
 Only the exact expected comment authored by `github-actions[bot]` (or an
 explicit trusted bot login) counts as delivered. Failures are isolated per
 Issue; close and label cleanup share one patch, failures are aggregated, and a
 later run retries without undoing the verified push or blocking Pages.
 
-The default scan admits at most 100 oldest open matching Issues per run.
+Each batch admits at most 100 matching Issues; a direct opened event is
+prioritized when the merged recovery batch is full.
 GitHub Search (including its 1,000-result ceiling), REST rate/secondary limits,
 Actions minutes, repository size, and raw-CDN caching remain independent
 operational quotas.
+
+Generated collection entries distinguish active, tombstone, and lifetime
+records and expose remaining active slots. The collection limit counts active
+records, so deletion releases a slot; the global event and request limits
+remain lifetime bounds. Status and registry utilization report remaining
+ledger capacity. Their `healthy` value covers repository integrity only and
+explicitly does not measure GitHub, Actions, or Pages availability.
 
 ## 11. Explicit non-goals
 

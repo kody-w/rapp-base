@@ -51,6 +51,9 @@ def build(root: Path, manifest: dict[str, Any], *, write: bool = True) -> dict[s
     immutable: dict[str, tuple[bytes, str, str]] = {}
     collection_entries: list[dict[str, Any]] = []
     collections = collection_map(manifest)
+    total_active = 0
+    total_tombstones = 0
+    total_lifetime = 0
 
     for name in sorted(collections):
         collection = collections[name]
@@ -60,6 +63,10 @@ def build(root: Path, manifest: dict[str, Any], *, write: bool = True) -> dict[s
             for record_id in sorted(records)
             if not records[record_id]["deleted"]
         ]
+        tombstones = len(records) - len(active)
+        total_active += len(active)
+        total_tombstones += tombstones
+        total_lifetime += len(records)
         if len(active) > manifest["limits"]["snapshot_items"]:
             raise RappError(
                 "snapshot_limit",
@@ -120,7 +127,19 @@ def build(root: Path, manifest: dict[str, Any], *, write: bool = True) -> dict[s
 
         collection_entries.append(
             {
+                "capacity": {
+                    "active_limit": manifest["limits"]["records_per_collection"],
+                    "remaining_active_slots": max(
+                        0,
+                        manifest["limits"]["records_per_collection"] - len(active),
+                    ),
+                },
                 "count": len(active),
+                "counts": {
+                    "active": len(active),
+                    "lifetime": len(records),
+                    "tombstones": tombstones,
+                },
                 "description": collection["description"],
                 "fields": collection["fields"],
                 "immutable_url": f"{raw_base}/{snapshot_path}",
@@ -232,15 +251,27 @@ def build(root: Path, manifest: dict[str, Any], *, write: bool = True) -> dict[s
             "totalItems": len(collection_entries),
         }
     )
+    capacity = {
+        "events": _capacity(len(state.events), manifest["limits"]["events"]),
+        "requests": _capacity(len(requests), manifest["limits"]["requests"]),
+    }
+    health = {
+        "excludes": ["github", "github-actions", "github-pages"],
+        "healthy": True,
+        "operational_availability": "not_measured",
+        "scope": "repository_integrity_only",
+    }
     mutable[f"{API_PREFIX}/status.json"] = canonical_bytes(
         {
             "schema": "rapp-base-status/1.0",
+            "capacity": capacity,
             "collections": len(collection_entries),
             "events": len(state.events),
             "generator": BUILDER_PROFILE,
             "generated_at": generated_at,
             "generation_sha256": generation,
             "head": state.head,
+            "health": health,
             "healthy": True,
             "profile": PROFILE,
             "receipts": len(receipts),
@@ -288,6 +319,7 @@ def build(root: Path, manifest: dict[str, Any], *, write: bool = True) -> dict[s
             },
         },
         "collections": collection_entries,
+        "health": health,
         "entries": [
             {
                 "name": "status",
@@ -329,10 +361,14 @@ def build(root: Path, manifest: dict[str, Any], *, write: bool = True) -> dict[s
         "repository": manifest["repository"],
         "status_url": status_url,
         "summary": {
+            "active": total_active,
+            "capacity": capacity,
             "collections": len(collection_entries),
             "events": len(state.events),
+            "lifetime_records": total_lifetime,
             "receipts": len(receipts),
             "requests": len(requests),
+            "tombstones": total_tombstones,
         },
         "versions_url": versions_url,
     }
@@ -369,6 +405,15 @@ def build(root: Path, manifest: dict[str, Any], *, write: bool = True) -> dict[s
         "receipts": len(receipts),
         "requests": len(requests),
         "versions": len(version_entries),
+    }
+
+
+def _capacity(used: int, limit: int) -> dict[str, Any]:
+    return {
+        "limit": limit,
+        "remaining": max(0, limit - used),
+        "used": used,
+        "utilization": used / limit,
     }
 
 

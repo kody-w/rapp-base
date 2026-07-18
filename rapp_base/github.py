@@ -140,6 +140,46 @@ class GitHubClient:
             )
         return result
 
+    def fetch_reconciliation_document(
+        self, *, limit: int, event: Any | None = None
+    ) -> dict[str, Any]:
+        """Merge one trusted opened-Issue observation with the recovery scan."""
+
+        repository = self.fetch_repository()
+        event_issue: dict[str, Any] | None = None
+        if event is not None:
+            opened = normalize_opened_issue_event(event)
+            if opened is not None:
+                event_repository = opened["repository"]
+                if event_repository != repository:
+                    raise RappError(
+                        "github_event",
+                        "Issue event repository identity differs from GitHub REST",
+                    )
+                candidate = opened["issue"]
+                if (
+                    candidate["state"] == "open"
+                    and candidate["title"].startswith(REQUEST_TITLE_PREFIX)
+                ):
+                    event_issue = candidate
+
+        observed: dict[int, dict[str, Any]] = {}
+        if event_issue is not None:
+            observed[event_issue["id"]] = event_issue
+        for issue in self.fetch_request_issues(limit=limit):
+            prior = observed.get(issue["id"])
+            if prior is not None:
+                if prior["node_id"] != issue["node_id"]:
+                    raise RappError(
+                        "github_api",
+                        "Issue database id has conflicting node ids",
+                    )
+                continue
+            if len(observed) == limit:
+                break
+            observed[issue["id"]] = issue
+        return {"issues": list(observed.values()), "repository": repository}
+
 
 def normalize_api_repository(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
@@ -152,6 +192,20 @@ def normalize_api_repository(value: Any) -> dict[str, Any]:
         }
     except KeyError as exc:
         raise RappError("github_api", "repository identity is incomplete") from exc
+
+
+def normalize_opened_issue_event(value: Any) -> dict[str, Any] | None:
+    """Reduce only an `issues: opened` payload through the REST adapters."""
+
+    if not isinstance(value, dict) or value.get("action") != "opened":
+        return None
+    raw_issue = value.get("issue")
+    if not isinstance(raw_issue, dict) or "pull_request" in raw_issue:
+        return None
+    return {
+        "issue": normalize_api_issue(raw_issue),
+        "repository": normalize_api_repository(value.get("repository")),
+    }
 
 
 def normalize_api_issue(value: Any) -> dict[str, Any]:

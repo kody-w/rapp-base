@@ -17,9 +17,10 @@ from .constants import (
 )
 from .errors import RappError, public_error_message
 from .jsonutil import (
+    canonical_bytes,
     ensure_safe_segment,
     expect_keys,
-    extract_command_text,
+    extract_command_candidate,
     normalize_timestamp,
     object_hash,
     require_hash,
@@ -39,6 +40,24 @@ def parse_command_text(text: str, limits: dict[str, int]) -> dict[str, Any]:
         byte_limit=limits["command_bytes"],
         require_object=True,
     )
+    return _validate_parsed_command(command)
+
+
+def validate_command_snapshot(
+    command: Any, limits: dict[str, int]
+) -> dict[str, Any]:
+    """Validate a normalized command when its original bytes are hash-only."""
+
+    encoded = canonical_bytes(command)
+    normalized = strict_loads(
+        encoded[:-1].decode("utf-8"),
+        limits,
+        require_object=True,
+    )
+    return _validate_parsed_command(normalized)
+
+
+def _validate_parsed_command(command: dict[str, Any]) -> dict[str, Any]:
     expect_keys(
         command,
         required={"schema", "command_id", "operation", "collection"},
@@ -235,8 +254,10 @@ def admit_request(
     command_sha256: str | None = None
     parse_error: dict[str, str] | None = None
     try:
-        command_text = extract_command_text(issue["body"], limits)
+        command_text = extract_command_candidate(issue["body"], limits)
         command_sha256 = sha256_bytes(command_text.encode("utf-8"))
+        if len(command_text.encode("utf-8")) > limits["command_bytes"]:
+            raise RappError("command_too_large", "JSON command exceeds the byte limit")
         command = parse_command_text(command_text, limits)
     except RappError as exc:
         parse_error = {
@@ -264,7 +285,7 @@ def admit_request(
         "body_sha256": sha256_bytes(body_bytes),
         "command": command,
         "command_sha256": command_sha256,
-        "command_text": command_text,
+        "command_text": None,
         "issue": {
             "id": issue["id"],
             "node_id": issue["node_id"],

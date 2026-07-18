@@ -19,8 +19,12 @@ trusted GitHub API metadata. It does not mean anonymous writes.
 - Issue database and node IDs, repository identity, actor numeric ID, and
   author association are retained in immutable envelopes/events.
 - JSON rejects duplicate keys, non-finite numbers, unknown fields, control
-  characters, traversal-like paths, excessive size/depth/nodes, and multiple
-  candidates.
+  characters, unsafe numeric magnitudes, traversal-like
+  paths, excessive size/depth/nodes, and multiple candidates.
+- Invalid admissions retain body/candidate hashes, snapshotted parser
+  settings, and a stable error without copying rejected raw text into the
+  immutable request. This minimizes duplicate retention but cannot remove the
+  original text from the public GitHub Issue.
 - Policies, ownership, schema, uniqueness, and optimistic revision are checked
   at append time.
 - Organization `MEMBER` association grants no maintainer or owner-recovery
@@ -30,10 +34,16 @@ trusted GitHub API metadata. It does not mean anonymous writes.
 - Generated immutable versions are indexed and cannot silently mutate or
   disappear. Git history is the external anchor against a coordinated rewrite
   of both a version and its index metadata.
+- Immutable publication stages and fsyncs complete same-directory bytes before
+  atomic no-replace publication. CI/processing compare prior Git objects and
+  reject non-monotonic immutable history.
 - Workflows use the ephemeral `GITHUB_TOKEN`, least job permissions, global
   serialization, pinned action commits, and no `pull_request_target`.
-- Issue text is written only to fixture JSON handled by Python; it is never
-  interpolated into a shell command or workflow expression.
+- Issue text reaches Python only through GitHub REST JSON or the trusted
+  `GITHUB_EVENT_PATH`; it is never interpolated into a shell command or
+  workflow expression.
+- Repository checks and the Pages allowlist reject symlinks, including broken
+  links and links that escape the repository.
 - The only network adapter calls GitHub's fixed REST origin. User URL fields
   are syntax validated but never fetched.
 - Browser rendering uses `textContent` and created DOM nodes for public data.
@@ -45,6 +55,10 @@ These controls do not protect readers from data that an authorized public
 author intentionally submits. Repository maintainers remain responsible for
 moderation and legal takedowns; Git history rewriting may be required for an
 emergency secret exposure and is outside the normal deletion protocol.
+
+`healthy` reports only verified repository history/projection integrity. It is
+not an availability or freshness attestation for GitHub REST, Actions, Pages,
+DNS, or raw-content delivery.
 
 ## Reporting a vulnerability
 

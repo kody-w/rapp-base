@@ -119,6 +119,14 @@ Git commits are public history. Never submit secrets, personal/private data,
 private URLs, regulated data, files, or content you cannot publish. Normal
 deletion does not erase Git or Issue history.
 
+Rejected admissions retain a SHA-256 of the Issue body, a candidate-command
+hash when a candidate was extractable, snapshotted parser limits/profile, and
+a stable error. They do **not** copy raw rejected body/candidate text into the
+immutable request. The original public Issue can still retain that text.
+Valid admissions retain the normalized command and its exact submitted-command
+hash; the three original v1 requests with legacy command-text snapshots remain
+replay compatible.
+
 Live records carry a semantic `revision`. Immutable version filenames use
 `sha8`, RAPP's historical name for the first **12** characters of SHA-256 over
 the exact stored bytes. `versions/index.json` retains both `content_sha256`
@@ -162,18 +170,20 @@ demo uses only `public` create and `owner` update/delete.
 
 The fixed `rapp-base-request` Issue Form label is optional. Routing uses the
 trusted title plus strict body parser, so SDK users do not need label
-permission. Scheduled/manual scans query up to 100 oldest open matching Issues
-per run; successful delivery closes them. A user-closed Issue that was never
-admitted is skipped. GitHub Search, REST, Actions, and secondary rate limits
-still apply, so high-volume deployments must lower cadence or use another
-backend.
+permission. An `issues: opened` run admits its trusted event Issue directly
+and merges/deduplicates it with the recovery scan. Manual recovery remains
+available; the scheduled recovery scan runs every six hours and queries up to
+100 oldest open matching Issues. Successful delivery closes them. A
+user-closed Issue that was never admitted is skipped. GitHub Search, REST,
+Actions, and secondary rate limits still apply.
 
 ## Replay and recovery
 
 `state/head.json` and every event anchor a deterministic `genesis_sha256` over
-collection names, field schemas, and seeds. Before the first event, a build
-re-anchors template customization. After any event, a replay-critical schema
-or seed change fails with a migration/new-major error. RAPP Base v1 has no
+collection names, field schemas, and seeds. A build may re-anchor template
+customization only while there are zero events, requests, and receipts. The
+first admission, including a rejection, locks genesis. A later replay-critical
+schema or seed change fails with `migration_required`. RAPP Base v1 has no
 schema migration mechanism: start a new API major/repository or implement an
 explicit future migration. Policy, description, and limit changes are allowed
 only when immutable admitted history still derives exactly.
@@ -190,6 +200,43 @@ a malicious coordinated rewrite of a version file and its index entry.
 Receipt comments are accepted as delivered only when the exact expected body
 was authored by the configured trusted Actions bot. Delivery failures are
 isolated and retried without rolling back already-pushed verified state.
+
+Admission order records first durable observation. Existing admission
+sequences never move; creation instant and immutable Issue database ID order
+only newly observed Issues within one reconciliation batch. CI and the
+processor compare prior Git objects with the candidate tree and reject a
+decreased head, changed genesis, or mutation/removal of prior immutable
+state/version-index entries.
+
+## Operations and scaling
+
+`healthy: true` in `status.json` and the registry means the checked repository
+history and projections are internally consistent. It does not measure GitHub
+API, Actions, raw-CDN, or Pages availability; those are explicitly reported as
+`not_measured`.
+
+Collection metadata reports active, tombstone, and lifetime record counts plus
+remaining active slots. `records_per_collection` limits active records, so a
+delete frees a create slot. Event and request limits are lifetime ledger
+bounds; status reports their utilization and remaining capacity.
+
+Run an isolated stdlib growth probe (it cleans `.scale-work` and never writes
+the real state tree):
+
+```sh
+python3.14 scripts/scale_probe.py \
+  --creates 100 --updates 200 --deletes 25 --rejections 25
+python3.14 scripts/scale_probe.py \
+  --creates 400 --updates 800 --deletes 100 --rejections 100
+```
+
+For this template, investigate before growth reaches any of these operational
+warning thresholds: probe time above 120 seconds, estimated Pages artifact
+above 100 MiB, request/event utilization above 80%, or any collection with
+less than 20% active headroom. These are conservative operator thresholds, not
+protocol limits; configured manifest limits and GitHub quotas remain
+authoritative. Compare probe JSON over time, especially largest files and
+directories, on representative hardware.
 
 See [SPEC.md](SPEC.md), [SECURITY.md](SECURITY.md), and
 [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -4,7 +4,7 @@
   "name_for_human": "RAPP Base",
   "name_for_model": "rapp_base",
   "description_for_human": "Browse bounded public collections published as static JSON.",
-  "description_for_model": "Read registry.json before using these public static resources. This is not a private database or a realtime service. Writes require one public GitHub Issue and are eventually consistent.",
+  "description_for_model": "Read registry.json before using these public static resources. This is not a private database or a realtime service. Writes require one public GitHub Issue and are eventually consistent. Healthy means repository integrity only; GitHub, Actions, and Pages availability are not measured.",
   "auth": {
     "type": "none"
   },

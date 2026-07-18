@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 import json
+import math
 import unittest
+from unittest import mock
 
 from rapp_base.commands import parse_command_text
 from rapp_base.errors import RappError
-from rapp_base.jsonutil import extract_command_text, strict_loads
+from rapp_base.jsonutil import (
+    canonical_bytes,
+    extract_command_text,
+    sha256_bytes,
+    strict_loads,
+    write_bytes_immutable,
+)
 from rapp_base.manifest import load_manifest
 
-from helpers import PROJECT_ROOT, command_id, create_command
+from helpers import PROJECT_ROOT, command_id, create_command, repository
 
 
 class StrictJsonTests(unittest.TestCase):
@@ -38,6 +46,65 @@ class StrictJsonTests(unittest.TestCase):
                         f'{{"value":{token}}}', self.limits, require_object=True
                     ),
                 )
+
+    def test_scalar_contract_normalizes_zero_rejects_unsafe_and_preserves_unicode(self):
+        value = strict_loads(
+            '{"float":-0.0,"exponent":-0e10,"integer":-0}',
+            self.limits,
+            require_object=True,
+        )
+        self.assertGreater(math.copysign(1, value["float"]), 0)
+        self.assertGreater(math.copysign(1, value["exponent"]), 0)
+        self.assertEqual(value["integer"], 0)
+        for token in (
+            "9007199254740992",
+            "9007199254740991.1",
+            "9007199254740992.0",
+            "1e20",
+        ):
+            with self.subTest(token=token):
+                self.assertCode(
+                    "number_out_of_range",
+                    lambda token=token: strict_loads(
+                        f'{{"value":{token}}}', self.limits, require_object=True
+                    ),
+                )
+        decomposed = strict_loads(
+            '{"value":"e\\u0301","e\\u0301":"value"}',
+            self.limits,
+            require_object=True,
+        )
+        self.assertEqual(decomposed["value"], "e\u0301")
+        self.assertEqual(decomposed["e\u0301"], "value")
+
+    def test_canonical_byte_and_hash_vectors_are_stable(self):
+        vectors = (
+            (
+                {"z": -0.0, "a": 1.25},
+                '{"a":1.25,"z":0.0}\n',
+                "54bb20358c12c227711ff7d4d644720a29b95549b255abe313b213dfe69ef2e3",
+            ),
+            (
+                {"é": "café", "astral": "😀"},
+                '{"astral":"😀","é":"café"}\n',
+                "c8f277c8ca83426bda18efefae2a0df35f8a03393017516b067298a32a45ac2a",
+            ),
+            (
+                {"z": 3, "aa": 2, "a": 1},
+                '{"a":1,"aa":2,"z":3}\n',
+                "3cea5b20a688384b4d9061ce0647dccee7f41d95d9c50c53e4c282b6335073ad",
+            ),
+            (
+                {"value": "e\u0301"},
+                '{"value":"é"}\n',
+                "76ffc8183b39bef5ef5474268efe0a76de74f4c38bf77f72dacdbfebd8ee4284",
+            ),
+        )
+        for value, text, digest in vectors:
+            with self.subTest(text=text):
+                encoded = canonical_bytes(value)
+                self.assertEqual(encoded, text.encode("utf-8"))
+                self.assertEqual(sha256_bytes(encoded), digest)
 
     def test_multiple_json_candidates_and_trailing_text_fail(self):
         self.assertCode(
@@ -118,7 +185,37 @@ class StrictJsonTests(unittest.TestCase):
             lambda: parse_command_text(json.dumps(command), self.limits),
         )
 
+    def test_immutable_publication_is_complete_and_identical_is_a_noop(self):
+        with repository() as root:
+            target = root / "state/events/publication.json"
+            data = b"complete immutable bytes\n"
+            self.assertTrue(write_bytes_immutable(target, data))
+            self.assertEqual(target.read_bytes(), data)
+            self.assertFalse(write_bytes_immutable(target, data))
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*.stage")), [])
+
+    def test_immutable_publication_detects_existing_conflict(self):
+        with repository() as root:
+            target = root / "state/events/conflict.json"
+            target.write_bytes(b"prior\n")
+            self.assertCode(
+                "immutable_conflict",
+                lambda: write_bytes_immutable(target, b"different\n"),
+            )
+            self.assertEqual(target.read_bytes(), b"prior\n")
+
+    def test_failed_immutable_publication_leaves_no_target_or_staging(self):
+        with repository() as root:
+            target = root / "state/events/failure.json"
+            with mock.patch(
+                "rapp_base.jsonutil.os.link",
+                side_effect=OSError("simulated publication failure"),
+            ):
+                with self.assertRaises(OSError):
+                    write_bytes_immutable(target, b"never published\n")
+            self.assertFalse(target.exists())
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*.stage")), [])
+
 
 if __name__ == "__main__":
     unittest.main()
-
