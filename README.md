@@ -150,12 +150,33 @@ demo uses only `public` create and `owner` update/delete.
 
 ## Template/operator setup
 
-1. Create a public repository from the template or fork and enable Issues and
-   Actions.
-2. Before processing any event, edit `manifest.json` with the real owner,
-   repository, collections, fields, seeds, policies, limits, and explicit
-   semantic `generated_at`.
-3. Permit the processor's scoped `contents: write` and `issues: write`
+The live `rapp-base` repository has admitted history and is **not** the clean
+template. A future clean template is planned at
+`kody-w/rapp-base-template`, but it has not been created yet. Until then, use
+only a zero-state exported copy whose head sequence is `0` and whose request,
+receipt, and event directories contain no JSON files.
+
+1. Put the zero-state export in a clean checkout or a directory without Git
+   metadata, then bind every deployment URL and fixture identity in one
+   guarded command:
+
+   ```sh
+   python3 scripts/bootstrap.py \
+     --root . \
+     --owner example-owner \
+     --repo example-data
+   ```
+
+   The command refuses admitted state, symlinks, unsafe GitHub names, and a
+   dirty or staged checkout. It never rewrites `.git`, removes only generated
+   `api/`, `versions/`, and `registry.json`, re-anchors the zero-state head,
+   and deterministically rebuilds the deployment.
+2. Review `manifest.json`, then customize collections, fields, seeds,
+   policies, limits, and explicit semantic `generated_at` only while the
+   deployment still has zero requests, receipts, and events. Re-run the
+   normal builder after semantic customization.
+3. Create the public GitHub repository, enable Issues and Actions, and permit
+   the processor's scoped `contents: write` and `issues: write`
    `GITHUB_TOKEN` permissions and let it fast-forward `main`; no PAT is used.
 4. Select **GitHub Actions** as the Pages source if the explorer is wanted.
 5. Generate, then run the read-only validation contract:

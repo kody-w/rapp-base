@@ -10,6 +10,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -63,6 +64,11 @@ def check(root: Path) -> None:
         raise RappError("python_version", "Python 3.12 or newer is required")
     _reject_symlinks(root)
     manifest = load_manifest(root)
+    repository = manifest["repository"]
+    schema_id_base = (
+        f"https://{quote(repository['owner'], safe='')}.github.io/"
+        f"{quote(repository['name'], safe='')}/schemas/"
+    )
     before = _snapshot(root)
     build(root, manifest, write=False)
     after = _snapshot(root)
@@ -102,9 +108,7 @@ def check(root: Path) -> None:
                     or value.get("$schema")
                     != "https://json-schema.org/draft/2020-12/schema"
                     or not isinstance(value.get("$id"), str)
-                    or not value["$id"].startswith(
-                        "https://kody-w.github.io/rapp-base/schemas/"
-                    )
+                    or not value["$id"].startswith(schema_id_base)
                 ):
                     raise RappError(
                         "invalid_json_schema",
