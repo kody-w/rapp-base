@@ -1,0 +1,26 @@
+{
+  "repository": {
+    "id": 9001,
+    "node_id": "R_repo9001",
+    "full_name": "kody-w/rapp-base"
+  },
+  "issues": [
+    {
+      "id": 700001,
+      "node_id": "I_fixture700001",
+      "number": 701,
+      "created_at": "2026-07-18T20:00:00Z",
+      "updated_at": "2026-07-18T20:00:00Z",
+      "user": {
+        "id": 7001
+      },
+      "author_association": "NONE",
+      "labels": [
+        "rapp-base-request"
+      ],
+      "body": "### Command\n\n```json\n{\"schema\":\"rapp-base-command/1.0\",\"command_id\":\"00000000-0000-4000-8000-000000000701\",\"operation\":\"create\",\"collection\":\"resources\",\"data\":{\"title\":\"Fixture resource\",\"url\":\"https://example.com/fixture\",\"kind\":\"article\",\"summary\":\"A complete end-to-end fixture resource.\",\"topics\":[\"fixture\"],\"free\":true,\"rating\":4}}\n```",
+      "state": "open",
+      "title": "[RAPP Base] create resources"
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+name: Process RAPP Base requests
+
+on:
+  issues:
+    types: [opened]
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rapp-base-write-main
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - name: Check out main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Reconcile, validate, and push
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          success=0
+          for attempt in 1 2 3; do
+            echo "Reconciliation attempt ${attempt}/3"
+            git fetch --no-tags origin main
+            git reset --hard origin/main
+            git clean -fd -- .work state api versions registry.json
+            mkdir -p .work
+            python3 scripts/fetch_issues.py --output .work/issues.json
+            python3 scripts/reconcile.py --input .work/issues.json
+            rm -rf .work
+            python3 scripts/build.py
+            make check
+            git add -A -- state api versions registry.json
+            if git diff --cached --quiet; then
+              success=1
+              break
+            fi
+            git commit -m "chore(state): reconcile public issue commands"
+            if git push origin HEAD:main; then
+              success=1
+              break
+            fi
+            echo "Push raced; discarding the candidate and recomputing."
+          done
+          test "${success}" -eq 1
+          git fetch --no-tags origin main
+          git reset --hard origin/main
+          git clean -fd -- .work
+      - name: Deliver committed receipts
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 scripts/deliver_receipts.py

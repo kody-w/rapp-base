@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Explore the public, GitHub-native RAPP Base static API.">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self' https://github.com">
+    <title>RAPP Base Explorer</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="shell hero">
+      <div>
+        <p class="eyebrow">GitHub-native public data</p>
+        <h1>RAPP Base</h1>
+        <p class="lede">A deterministic static collection publisher with public Issue commands.</p>
+      </div>
+      <div id="health" class="status-pill" aria-live="polite">Loading status…</div>
+    </header>
+
+    <main class="shell">
+      <aside class="notice" aria-label="Important limitations">
+        <strong>Public and eventually consistent.</strong>
+        Every Issue, record version, tombstone, receipt, and Git commit is durable public history.
+        Never submit secrets or personal/private data. Writes are not realtime and may wait for Actions.
+      </aside>
+
+      <section class="metrics" aria-label="Service status">
+        <article><span>Generation</span><code id="generation">—</code></article>
+        <article><span>Collections</span><strong id="collection-count">—</strong></article>
+        <article><span>Events</span><strong id="event-count">—</strong></article>
+        <article><span>Updated</span><time id="generated-at">—</time></article>
+      </section>
+
+      <section class="panel" aria-labelledby="browse-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Read plane</p>
+            <h2 id="browse-title">Browse collections</h2>
+          </div>
+          <label>
+            Collection
+            <select id="collection-select"></select>
+          </label>
+        </div>
+        <p id="collection-description" class="muted"></p>
+        <div class="link-row">
+          <a id="raw-link" target="_blank" rel="noopener noreferrer">Current raw JSON</a>
+          <a id="pinned-link" target="_blank" rel="noopener noreferrer">Immutable snapshot</a>
+        </div>
+        <div id="records" class="records" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="compose-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Write plane</p>
+            <h2 id="compose-title">Prepare one Issue command</h2>
+          </div>
+        </div>
+        <form id="composer">
+          <div class="form-grid">
+            <label>
+              Operation
+              <select id="operation">
+                <option value="create">Create</option>
+                <option value="update">Update</option>
+                <option value="delete">Delete</option>
+              </select>
+            </label>
+            <label>
+              Collection
+              <select id="command-collection"></select>
+            </label>
+            <label id="record-id-label">
+              Record ID
+              <input id="record-id" autocomplete="off" placeholder="r_abcd…">
+            </label>
+            <label id="revision-label">
+              Full current revision
+              <input id="revision" autocomplete="off" spellcheck="false" placeholder="64 lowercase hex characters">
+            </label>
+          </div>
+          <label id="data-label">
+            Data object
+            <textarea id="command-data" rows="10" spellcheck="false">{
+  "title": "An open resource",
+  "url": "https://example.com",
+  "kind": "article",
+  "summary": "A useful resource shared through a public Issue.",
+  "topics": ["example"],
+  "free": true,
+  "rating": 4
+}</textarea>
+          </label>
+          <div class="actions">
+            <button type="submit">Prepare public Issue</button>
+            <a id="issue-link" class="button secondary" target="_blank" rel="noopener noreferrer" hidden>Open prefilled Issue</a>
+          </div>
+          <p id="compose-error" class="error" role="alert"></p>
+          <pre id="command-preview" class="preview" tabindex="0"></pre>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="receipt-title">
+        <div>
+          <p class="eyebrow">Durable result</p>
+          <h2 id="receipt-title">Poll a command receipt</h2>
+        </div>
+        <form id="receipt-form" class="inline-form">
+          <label>
+            Command UUID
+            <input id="receipt-command-id" autocomplete="off" spellcheck="false">
+          </label>
+          <button type="submit">Poll</button>
+        </form>
+        <pre id="receipt-output" class="preview" aria-live="polite"></pre>
+      </section>
+    </main>
+
+    <footer class="shell">
+      <a href="./SPEC.md">Protocol specification</a>
+      <a href="./versions/index.json">Immutable versions</a>
+      <a href="./SECURITY.md">Security model</a>
+      <a href="./llms.txt">Agent index</a>
+    </footer>
+    <script type="module" src="./explorer.js"></script>
+  </body>
+</html>

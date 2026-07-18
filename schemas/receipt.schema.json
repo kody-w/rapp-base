@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kody-w.github.io/rapp-base/schemas/receipt.schema.json",
+  "title": "RAPP Base terminal receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "receipt_id",
+    "request_hash",
+    "command_id",
+    "issue",
+    "actor_id",
+    "status",
+    "code",
+    "message",
+    "occurred_at",
+    "event",
+    "record",
+    "duplicate_of"
+  ],
+  "properties": {
+    "schema": {
+      "const": "rapp-base-receipt/1.0"
+    },
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "request_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "command_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "node_id",
+        "number",
+        "title"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "actor_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": [
+        "applied",
+        "rejected",
+        "noop"
+      ]
+    },
+    "code": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "event": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "hash",
+            "path",
+            "sequence"
+          ],
+          "properties": {
+            "hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "path": {
+              "type": "string"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      ]
+    },
+    "record": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "collection",
+            "deleted",
+            "id",
+            "revision"
+          ],
+          "properties": {
+            "collection": {
+              "type": "string"
+            },
+            "deleted": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
+    },
+    "duplicate_of": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "issue_id",
+            "request_hash"
+          ],
+          "properties": {
+            "issue_id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "request_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

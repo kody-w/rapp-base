@@ -1,0 +1,41 @@
+{
+  "schema": "rapp-base-static-agent-discovery/1.0",
+  "name": "RAPP Base",
+  "profile": "rapp-base/1.0",
+  "mode": "resources-only",
+  "description": "Public, bounded static JSON resources with asynchronous GitHub Issue commands.",
+  "live_agent_server": false,
+  "registry": "https://kody-w.github.io/rapp-base/registry.json",
+  "resources": [
+    {
+      "name": "status",
+      "media_type": "application/json",
+      "url": "https://kody-w.github.io/rapp-base/api/v1/status.json"
+    },
+    {
+      "name": "collections",
+      "media_type": "application/json",
+      "url": "https://kody-w.github.io/rapp-base/api/v1/collections.json"
+    },
+    {
+      "name": "events",
+      "media_type": "application/json",
+      "url": "https://kody-w.github.io/rapp-base/api/v1/events/index.json"
+    },
+    {
+      "name": "receipts",
+      "media_type": "application/json",
+      "url": "https://kody-w.github.io/rapp-base/api/v1/receipts/index.json"
+    },
+    {
+      "name": "versions",
+      "media_type": "application/json",
+      "url": "https://kody-w.github.io/rapp-base/versions/index.json"
+    }
+  ],
+  "write": {
+    "command_schema": "https://kody-w.github.io/rapp-base/schemas/command.schema.json",
+    "transport": "public-github-issue",
+    "eventual_consistency": true
+  }
+}

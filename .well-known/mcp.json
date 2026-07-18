@@ -1,0 +1,28 @@
+{
+  "schema": "rapp-base-mcp-static-discovery/1.0",
+  "description": "Static resource hints only. RAPP Base does not expose a live MCP server.",
+  "servers": [],
+  "resources": [
+    {
+      "name": "rapp-base-registry",
+      "mimeType": "application/json",
+      "uri": "https://kody-w.github.io/rapp-base/registry.json"
+    },
+    {
+      "name": "rapp-base-collections",
+      "mimeType": "application/json",
+      "uri": "https://kody-w.github.io/rapp-base/api/v1/collections.json"
+    },
+    {
+      "name": "rapp-base-events",
+      "mimeType": "application/json",
+      "uri": "https://kody-w.github.io/rapp-base/api/v1/events/index.json"
+    },
+    {
+      "name": "rapp-base-versions",
+      "mimeType": "application/json",
+      "uri": "https://kody-w.github.io/rapp-base/versions/index.json"
+    }
+  ],
+  "tools": []
+}

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kody-w.github.io/rapp-base/schemas/command.schema.json",
+  "title": "RAPP Base issue command",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "command_id",
+    "operation",
+    "collection"
+  ],
+  "properties": {
+    "schema": {
+      "const": "rapp-base-command/1.0"
+    },
+    "command_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "operation": {
+      "enum": [
+        "create",
+        "update",
+        "delete"
+      ]
+    },
+    "collection": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,62}$"
+    },
+    "record_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$"
+    },
+    "if_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "data": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "create"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "data"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "record_id"
+              ]
+            },
+            {
+              "required": [
+                "if_revision"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "update"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "record_id",
+          "if_revision",
+          "data"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "delete"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "record_id",
+          "if_revision"
+        ],
+        "not": {
+          "required": [
+            "data"
+          ]
+        }
+      }
+    }
+  ]
+}

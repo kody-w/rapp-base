@@ -1,0 +1,21 @@
+name: RAPP Base command
+description: Submit exactly one public create, update, or delete command
+title: "[RAPP Base] "
+labels:
+  - rapp-base-request
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Everything here and every accepted version remains public in Git history.**
+        Do not submit secrets, personal/private data, files, or URLs that require fetching.
+        Issue edits are not retries: the first admitted body is frozen. Open a new issue to correct a command.
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: Paste one JSON object using schema rapp-base-command/1.0. The form renders it as JSON automatically.
+      placeholder: '{"schema":"rapp-base-command/1.0","command_id":"00000000-0000-4000-8000-000000000001","operation":"create","collection":"resources","data":{"title":"Example","url":"https://example.com","kind":"article","summary":"A useful public resource.","topics":["example"],"free":true,"rating":4.5}}'
+      render: json
+    validations:
+      required: true

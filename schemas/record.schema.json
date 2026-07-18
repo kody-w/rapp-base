@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kody-w.github.io/rapp-base/schemas/record.schema.json",
+  "title": "RAPP Base current record or tombstone",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/record"
+    },
+    {
+      "$ref": "#/$defs/tombstone"
+    }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": [
+        "schema",
+        "id",
+        "collection",
+        "owner_id",
+        "created_at",
+        "updated_at",
+        "deleted",
+        "revision"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "collection": {
+          "type": "string"
+        },
+        "owner_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "record": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "required": [
+            "data"
+          ],
+          "properties": {
+            "schema": {
+              "const": "rapp-base-record/1.0"
+            },
+            "deleted": {
+              "const": false
+            },
+            "data": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "tombstone": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "required": [
+            "deleted_at",
+            "prior_revision"
+          ],
+          "properties": {
+            "schema": {
+              "const": "rapp-base-tombstone/1.0"
+            },
+            "deleted": {
+              "const": true
+            },
+            "deleted_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "prior_revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

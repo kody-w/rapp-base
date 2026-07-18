@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kody-w.github.io/rapp-base/schemas/registry.schema.json",
+  "title": "RAPP static API registry with RAPP Base profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "profile",
+    "name",
+    "repository",
+    "raw_base",
+    "pages_base",
+    "generated",
+    "generated_at",
+    "generator",
+    "generation_sha256",
+    "status_url",
+    "receipts_url",
+    "events_url",
+    "versions_url",
+    "summary",
+    "entries",
+    "capabilities",
+    "collections",
+    "immutable_request_versions"
+  ],
+  "properties": {
+    "schema": {
+      "const": "rapp-static-api/1.0"
+    },
+    "profile": {
+      "const": "rapp-base/1.0"
+    },
+    "name": {
+      "type": "string"
+    },
+    "repository": {
+      "type": "object"
+    },
+    "raw_base": {
+      "type": "string"
+    },
+    "pages_base": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "generated": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "generator": {
+      "const": "rapp-base-builder/1.0"
+    },
+    "generation_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "status_url": {
+      "type": "string"
+    },
+    "receipts_url": {
+      "type": "string"
+    },
+    "events_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "versions_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "summary": {
+      "type": "object"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "schema",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "schema": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "capabilities": {
+      "type": "object"
+    },
+    "collections": {
+      "type": "array"
+    },
+    "immutable_request_versions": {
+      "type": "array"
+    }
+  }
+}

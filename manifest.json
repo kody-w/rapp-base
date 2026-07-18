@@ -1,0 +1,216 @@
+{
+  "schema": "rapp-base-manifest/1.0",
+  "name": "RAPP Base",
+  "profile": "rapp-base/1.0",
+  "description": "A GitHub-native public backend and static collection publisher.",
+  "repository": {
+    "owner": "kody-w",
+    "name": "rapp-base",
+    "branch": "main"
+  },
+  "generated_at": "2026-07-18T18:39:45Z",
+  "limits": {
+    "issue_body_bytes": 32768,
+    "command_bytes": 16384,
+    "json_depth": 8,
+    "json_nodes": 512,
+    "object_keys": 64,
+    "array_items": 100,
+    "string_bytes": 4096,
+    "fields_per_collection": 32,
+    "records_per_collection": 500,
+    "snapshot_items": 500,
+    "generated_collection_bytes": 2097152,
+    "issues_per_reconcile": 100,
+    "requests": 10000,
+    "events": 10000
+  },
+  "collections": [
+    {
+      "name": "rapps",
+      "description": "Small public apps and experiments built around useful, open data.",
+      "policies": {
+        "create": "public",
+        "update": "owner",
+        "delete": "owner"
+      },
+      "fields": {
+        "name": {
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "description": {
+          "type": "string",
+          "required": true,
+          "minLength": 8,
+          "maxLength": 500
+        },
+        "homepage": {
+          "type": "string",
+          "required": true,
+          "format": "url",
+          "maxLength": 500
+        },
+        "category": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "data",
+            "developer-tool",
+            "education",
+            "productivity"
+          ]
+        },
+        "tags": {
+          "type": "string[]",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 8
+        },
+        "featured": {
+          "type": "boolean",
+          "required": true
+        },
+        "stars": {
+          "type": "integer",
+          "required": true,
+          "min": 0,
+          "max": 1000000000
+        }
+      },
+      "seed": [
+        {
+          "id": "rapp-base-explorer",
+          "owner_id": 0,
+          "created_at": "2026-07-18T18:39:45Z",
+          "data": {
+            "name": "RAPP Base Explorer",
+            "description": "Browse the generated collections and prepare public issue commands.",
+            "homepage": "https://kody-w.github.io/rapp-base/",
+            "category": "developer-tool",
+            "tags": [
+              "github",
+              "json",
+              "static-api"
+            ],
+            "featured": true,
+            "stars": 0
+          }
+        },
+        {
+          "id": "rapp-static-apis",
+          "owner_id": 0,
+          "created_at": "2026-07-18T18:39:45Z",
+          "data": {
+            "name": "RAPP Static APIs",
+            "description": "The canonical specification for static APIs served from GitHub raw data.",
+            "homepage": "https://github.com/kody-w/rapp-static-apis",
+            "category": "developer-tool",
+            "tags": [
+              "rapp",
+              "specification"
+            ],
+            "featured": false,
+            "stars": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "resources",
+      "description": "Curated links to durable, openly accessible learning resources.",
+      "policies": {
+        "create": "public",
+        "update": "owner",
+        "delete": "owner"
+      },
+      "fields": {
+        "title": {
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "url": {
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "format": "url",
+          "maxLength": 500
+        },
+        "kind": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "article",
+            "documentation",
+            "course",
+            "tool"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "required": true,
+          "minLength": 8,
+          "maxLength": 500
+        },
+        "topics": {
+          "type": "string[]",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 8
+        },
+        "free": {
+          "type": "boolean",
+          "required": true
+        },
+        "rating": {
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 5
+        }
+      },
+      "seed": [
+        {
+          "id": "github-actions-docs",
+          "owner_id": 0,
+          "created_at": "2026-07-18T18:39:45Z",
+          "data": {
+            "title": "GitHub Actions documentation",
+            "url": "https://docs.github.com/actions",
+            "kind": "documentation",
+            "summary": "Official documentation for automating repository workflows on GitHub.",
+            "topics": [
+              "automation",
+              "github"
+            ],
+            "free": true,
+            "rating": 5
+          }
+        },
+        {
+          "id": "python-library-reference",
+          "owner_id": 0,
+          "created_at": "2026-07-18T18:39:45Z",
+          "data": {
+            "title": "Python standard library",
+            "url": "https://docs.python.org/3/library/",
+            "kind": "documentation",
+            "summary": "The batteries-included reference used by the RAPP Base engine.",
+            "topics": [
+              "python",
+              "standard-library"
+            ],
+            "free": true,
+            "rating": 5
+          }
+        }
+      ]
+    }
+  ]
+}
