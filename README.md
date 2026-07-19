@@ -253,10 +253,22 @@ python3.14 scripts/scale_probe.py \
 For this template, investigate before growth reaches any of these operational
 warning thresholds: probe time above 120 seconds, estimated Pages artifact
 above 100 MiB, request/event utilization above 80%, or any collection with
-less than 20% active headroom. These are conservative operator thresholds, not
-protocol limits; configured manifest limits and GitHub quotas remain
-authoritative. Compare probe JSON over time, especially largest files and
-directories, on representative hardware.
+less than 20% active headroom. Also plan index sharding before any generated
+index reaches 400 KiB.
+
+The initial 2026-07-18 probe on the reference hardware measured:
+
+| Applied events | Requests | Files | Tree bytes | Pages bytes | Total time | Largest index |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 250 | 300 | 2,381 | 3.0 MB | 1.86 MB | 1.66 s | 139 KB |
+| 1,000 | 1,200 | 9,281 | 10.7 MB | 6.99 MB | 9.65 s | 549 KB |
+
+These are shape- and hardware-specific discovery baselines, not capacity
+claims. The 1,000-event result crosses the monolithic-index warning before
+runtime or Pages size becomes concerning, so production deployments should
+introduce sharded indexes or checkpoints before roughly 750 similarly shaped
+events. Configured manifest limits and GitHub quotas remain authoritative.
+Compare probe JSON over time on representative hardware.
 
 See [SPEC.md](SPEC.md), [SECURITY.md](SECURITY.md), and
 [CONTRIBUTING.md](CONTRIBUTING.md).
