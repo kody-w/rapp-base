@@ -151,14 +151,13 @@ demo uses only `public` create and `owner` update/delete.
 ## Template/operator setup
 
 The live `rapp-base` repository has admitted history and is **not** the clean
-template. A future clean template is planned at
-`kody-w/rapp-base-template`, but it has not been created yet. Until then, use
-only a zero-state exported copy whose head sequence is `0` and whose request,
-receipt, and event directories contain no JSON files.
+template. Start from
+[`kody-w/rapp-base-template`](https://github.com/kody-w/rapp-base-template),
+whose head sequence is `0` and whose request, receipt, and event directories
+contain no JSON files.
 
-1. Put the zero-state export in a clean checkout or a directory without Git
-   metadata, then bind every deployment URL and fixture identity in one
-   guarded command:
+1. Select **Use this template**, clone the new repository, then bind every
+   deployment URL and fixture identity in one guarded command:
 
    ```sh
    python3 scripts/bootstrap.py \

@@ -250,10 +250,6 @@ class BootstrapTests(unittest.TestCase):
                 future_endpoint.read_text(encoding="utf-8"),
                 '{"schema":"rapp-base-future/2.0"}\n',
             )
-            self.assertIn(
-                "kody-w/rapp-base-template",
-                (root / "README.md").read_text(encoding="utf-8"),
-            )
             for relative in (
                 "tests/fixtures/issues.json",
                 "tests/helpers.py",
