@@ -1,6 +1,9 @@
 const COMMAND_SCHEMA = "rapp-base-command/1.0";
 const BASE_SCHEMA = "rapp-static-api/1.0";
 const PROFILE = "rapp-base/1.0";
+const PUBLICATION_ATTESTATION_HEADING = "Publication attestation";
+const PUBLICATION_ATTESTATION =
+  "I attest that I have all rights needed to publish this content, that it contains no secrets, private data, or personal data, and that I understand GitHub Issue, Git, version, and tombstone history is public and normal deletion is not erasure.";
 const MAX_PREFILLED_ISSUE_URL = 7000;
 const ID_RE = /^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$/;
 const COLLECTION_RE = /^[a-z][a-z0-9_-]{0,62}$/;
@@ -410,7 +413,7 @@ class CollectionClient {
       throw new RappBaseError("command_too_large", "command exceeds the configured byte limit");
     }
     const title = `[RAPP Base] ${operation} ${this.name}`;
-    const issueBody = `### Command\n\n\`\`\`json\n${json}\n\`\`\``;
+    const issueBody = formatIssueBody(json);
     if (
       new TextEncoder().encode(issueBody).length >
       this.client.limits.issue_body_bytes
@@ -978,16 +981,33 @@ function validatePrepared(value) {
   const expectedJson = JSON.stringify(value.command, null, 2);
   const expectedTitle =
     `[RAPP Base] ${value.command.operation} ${value.command.collection}`;
+  const expectedBodies = [
+    formatLegacyIssueBody(expectedJson),
+    formatIssueBody(expectedJson, "X"),
+    formatIssueBody(expectedJson, "x"),
+  ];
   if (
     value.json !== expectedJson ||
     value.title !== expectedTitle ||
-    value.issueBody !== `### Command\n\n\`\`\`json\n${expectedJson}\n\`\`\``
+    !expectedBodies.includes(value.issueBody)
   ) {
     throw new RappBaseError(
       "invalid_command",
       "prepared command is not an official routable Issue",
     );
   }
+}
+
+function formatLegacyIssueBody(json) {
+  return `### Command\n\n\`\`\`json\n${json}\n\`\`\``;
+}
+
+function formatIssueBody(json, checked = "X") {
+  return (
+    `${formatLegacyIssueBody(json)}\n\n` +
+    `### ${PUBLICATION_ATTESTATION_HEADING}\n\n` +
+    `- [${checked}] ${PUBLICATION_ATTESTATION}`
+  );
 }
 
 function delay(milliseconds, signal) {

@@ -18,7 +18,7 @@
       "labels": [
         "rapp-base-request"
       ],
-      "body": "### Command\n\n```json\n{\"schema\":\"rapp-base-command/1.0\",\"command_id\":\"00000000-0000-4000-8000-000000000701\",\"operation\":\"create\",\"collection\":\"resources\",\"data\":{\"title\":\"Fixture resource\",\"url\":\"https://example.com/fixture\",\"kind\":\"article\",\"summary\":\"A complete end-to-end fixture resource.\",\"topics\":[\"fixture\"],\"free\":true,\"rating\":4}}\n```",
+      "body": "### Command\n\n```json\n{\"schema\":\"rapp-base-command/1.0\",\"command_id\":\"00000000-0000-4000-8000-000000000701\",\"operation\":\"create\",\"collection\":\"resources\",\"data\":{\"title\":\"Fixture resource\",\"url\":\"https://example.com/fixture\",\"kind\":\"article\",\"summary\":\"A complete end-to-end fixture resource.\",\"topics\":[\"fixture\"],\"free\":true,\"rating\":4}}\n```\n\n### Publication attestation\n\n- [X] I attest that I have all rights needed to publish this content, that it contains no secrets, private data, or personal data, and that I understand GitHub Issue, Git, version, and tombstone history is public and normal deletion is not erasure.",
       "state": "open",
       "title": "[RAPP Base] create resources"
     }

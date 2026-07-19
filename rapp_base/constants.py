@@ -8,6 +8,13 @@ BUILDER_PROFILE = "rapp-base-builder/1.0"
 PARSER_PROFILE = "rapp-base-command-parser/1.0"
 REQUEST_LABEL = "rapp-base-request"
 REQUEST_TITLE_PREFIX = "[RAPP Base]"
+PUBLICATION_ATTESTATION_HEADING = "Publication attestation"
+PUBLICATION_ATTESTATION = (
+    "I attest that I have all rights needed to publish this content, that it "
+    "contains no secrets, private data, or personal data, and that I understand "
+    "GitHub Issue, Git, version, and tombstone history is public and normal "
+    "deletion is not erasure."
+)
 
 API_MAJOR = 1
 API_PREFIX = f"api/v{API_MAJOR}"

@@ -9,12 +9,8 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 jobs:
-  deploy:
+  decision:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -22,7 +18,49 @@ jobs:
        (github.event.workflow_run.name == 'Process RAPP Base requests' ||
         github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      deploy: ${{ steps.deployment-decision.outputs.deploy }}
+      reason: ${{ steps.deployment-decision.outputs.reason }}
+    steps:
+      - name: Check out current main for decision
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: main
+      - name: Determine deployment need
+        id: deployment-decision
+        env:
+          TRIGGER_EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_NAME: ${{ github.event.workflow_run.name || '' }}
+          WORKFLOW_RUN_EVENT: ${{ github.event.workflow_run.event || '' }}
+          WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          decision="$(
+            python3 scripts/pages_deployment.py \
+              --event-name "${TRIGGER_EVENT_NAME}" \
+              --current-sha "$(git rev-parse HEAD)" \
+              --workflow-name "${WORKFLOW_RUN_NAME}" \
+              --workflow-event "${WORKFLOW_RUN_EVENT}" \
+              --workflow-conclusion "${WORKFLOW_RUN_CONCLUSION}" \
+              --workflow-head-sha "${WORKFLOW_RUN_HEAD_SHA}"
+          )"
+          printf '%s\n' "${decision}" | tee -a "${GITHUB_OUTPUT}"
+          {
+            printf '### Pages deployment decision\n\n'
+            printf '```text\n%s\n```\n' "${decision}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  deploy:
+    needs: decision
+    if: ${{ needs.decision.outputs.deploy == 'true' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     permissions:
       contents: read
       pages: write
@@ -31,7 +69,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Check out current main
+      - name: Check out current main for deployment
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           ref: main

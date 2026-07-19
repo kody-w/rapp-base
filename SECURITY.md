@@ -8,6 +8,14 @@ public artifacts. Deleting a record does not remove prior values from Git
 history or GitHub. Never submit credentials, tokens, private URLs, personal
 data, regulated data, or content you are not allowed to publish.
 
+The required Issue Form checkbox records the submitter's assertion that they
+have publication rights and supplied no secrets or private/personal data.
+Submitting a raw-JSON command or an exact legacy v1.0 SDK wrapper
+programmatically constitutes the same assertion. The legacy wrapper is not an
+Issue Form path. None of these paths proves rights, scans for sensitive data,
+or establishes that content is suitable; maintainers remain responsible for
+moderation.
+
 There is no custom authentication or authorization server. A `public` mutation
 means a GitHub-authenticated Issue author, identified by the numeric user ID in
 trusted GitHub API metadata. It does not mean anonymous writes.

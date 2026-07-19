@@ -6,10 +6,15 @@ import unittest
 from unittest import mock
 
 from rapp_base.commands import parse_command_text
+from rapp_base.constants import (
+    PUBLICATION_ATTESTATION,
+    PUBLICATION_ATTESTATION_HEADING,
+)
 from rapp_base.errors import RappError
 from rapp_base.jsonutil import (
     canonical_bytes,
     extract_command_text,
+    render_issue_form_body,
     sha256_bytes,
     strict_loads,
     write_bytes_immutable,
@@ -116,26 +121,82 @@ class StrictJsonTests(unittest.TestCase):
             lambda: strict_loads('{"ok":true} trailing', self.limits, require_object=True),
         )
 
-    def test_exact_issue_form_fence_is_accepted(self):
-        text = json.dumps(create_command(1), separators=(",", ":"))
-        body = f"### Command\n\n```json\n{text}\n```"
-        self.assertEqual(extract_command_text(body, self.limits), text)
-        parsed = parse_command_text(extract_command_text(body, self.limits), self.limits)
+    def test_raw_legacy_v1_sdk_and_checked_issue_form_bodies_are_accepted(self):
+        text = json.dumps(create_command(1), ensure_ascii=False, indent=2)
+        legacy_body = f"### Command\n\n```json\n{text}\n```"
+        self.assertEqual(extract_command_text(text, self.limits), text)
+        self.assertEqual(extract_command_text(legacy_body, self.limits), text)
+        for checked in ("x", "X"):
+            with self.subTest(checked=checked):
+                body = render_issue_form_body(text).replace(
+                    "- [X] ", f"- [{checked}] "
+                )
+                self.assertEqual(extract_command_text(body, self.limits), text)
+        parsed = parse_command_text(
+            extract_command_text(legacy_body, self.limits),
+            self.limits,
+        )
         self.assertEqual(parsed["command_id"], command_id(1))
 
-    def test_extra_markdown_and_multiple_fences_fail(self):
+    def test_issue_form_declares_the_exact_required_attestation(self):
+        form = (
+            PROJECT_ROOT / ".github/ISSUE_TEMPLATE/rapp-base-command.yml"
+        ).read_text(encoding="utf-8")
+        expected = (
+            "  - type: checkboxes\n"
+            "    id: publication_attestation\n"
+            "    attributes:\n"
+            f"      label: {PUBLICATION_ATTESTATION_HEADING}\n"
+            "      options:\n"
+            f"        - label: {PUBLICATION_ATTESTATION}\n"
+            "          required: true"
+        )
+        self.assertIn(expected, form)
+        self.assertEqual(form.count(PUBLICATION_ATTESTATION), 1)
+
+    def test_unchecked_modified_duplicate_and_extra_attestation_text_fail(self):
         text = json.dumps(create_command(1), separators=(",", ":"))
-        self.assertCode(
-            "invalid_issue_form",
-            lambda: extract_command_text(f"intro\n### Command\n\n{text}", self.limits),
+        body = render_issue_form_body(text)
+        suffix_start = body.index(f"### {PUBLICATION_ATTESTATION_HEADING}")
+        invalid = (
+            body.replace("- [X] ", "- [ ] "),
+            body.replace("all rights needed", "permission"),
+            f"{body}\n\n{body[suffix_start:]}",
+            f"{body}\nextra attestation text",
         )
-        self.assertCode(
-            "invalid_issue_form",
-            lambda: extract_command_text(
-                f"### Command\n\n```json\n{text}\n```\n```json\n{{}}\n```",
-                self.limits,
+        for candidate in invalid:
+            with self.subTest(candidate=candidate[-80:]):
+                self.assertCode(
+                    "invalid_issue_form",
+                    lambda candidate=candidate: extract_command_text(
+                        candidate, self.limits
+                    ),
+                )
+
+    def test_extra_markdown_fences_and_sections_fail(self):
+        text = json.dumps(create_command(1), separators=(",", ":"))
+        body = render_issue_form_body(text)
+        legacy_body = f"### Command\n\n```json\n{text}\n```"
+        invalid = (
+            f"intro\n{body}",
+            body.replace(
+                f"\n\n### {PUBLICATION_ATTESTATION_HEADING}",
+                "\n\n### Unexpected section\n\nextra"
+                f"\n\n### {PUBLICATION_ATTESTATION_HEADING}",
             ),
+            f"{body}\n\n### Unexpected section\n\nextra",
+            body.replace(text, f"{text}\n```\n```json\n{{}}"),
+            f"{legacy_body}\ntrailing text",
+            legacy_body.replace(text, f"{text}\n```\n```json\n{{}}"),
         )
+        for candidate in invalid:
+            with self.subTest(candidate=candidate[:80]):
+                self.assertCode(
+                    "invalid_issue_form",
+                    lambda candidate=candidate: extract_command_text(
+                        candidate, self.limits
+                    ),
+                )
 
     def test_control_characters_fail_even_when_escaped(self):
         self.assertCode(

@@ -38,8 +38,20 @@ complete static page rather than cursor pagination.
 ## Create, update, and delete
 
 Every command Issue title must start exactly with `[RAPP Base]`. Its body must
-be either one command object or the exact Issue Form `### Command` wrapper.
-Labels are optional taxonomy and are never routing authority.
+use exactly one of three shapes: one raw command object; the legacy v1.0 SDK
+`### Command` plus one JSON fence ending with no trailing text; or the current
+Issue Form wrapper followed by its required checked **Publication
+attestation**. The exact statement is: “I attest that I have all rights needed
+to publish this content, that it contains no secrets, private data, or personal
+data, and that I understand GitHub Issue, Git, version, and tombstone history
+is public and normal deletion is not erasure.” Both `[x]` and `[X]` are
+accepted; unchecked, changed, duplicated, or additional form sections are
+rejected. Labels are optional taxonomy and are never routing authority.
+
+Raw JSON and the legacy v1.0 wrapper are programmatic submission paths. The
+legacy wrapper is compatibility for SDK-generated bodies, **not** an Issue
+Form path. Submitting either programmatic shape constitutes the same
+publication assertion as checking the current Issue Form box.
 
 Create (the processor derives the record ID):
 
@@ -104,7 +116,7 @@ const draft = db.collection("resources").prepareUpdate(
 );
 
 if (draft.requiresCopy) {
-  // Open draft.issueUrl and paste draft.json into the Command field.
+  // Open draft.issueUrl, paste draft.json, and check the attestation.
 }
 ```
 
@@ -118,6 +130,10 @@ Issues, immutable requests, receipts, events, record versions, tombstones, and
 Git commits are public history. Never submit secrets, personal/private data,
 private URLs, regulated data, files, or content you cannot publish. Normal
 deletion does not erase Git or Issue history.
+
+The checkbox or either programmatic submission records the submitter's
+assertion. It is not proof of publication rights and is not a review of
+content suitability.
 
 Rejected admissions retain a SHA-256 of the Issue body, a candidate-command
 hash when a candidate was extractable, snapshotted parser limits/profile, and

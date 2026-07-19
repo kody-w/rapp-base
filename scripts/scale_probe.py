@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 
 from rapp_base.build import build
 from rapp_base.errors import RappError
-from rapp_base.jsonutil import canonical_bytes
+from rapp_base.jsonutil import canonical_bytes, render_issue_form_body
 from rapp_base.manifest import load_manifest
 from rapp_base.reconcile import load_requests, reconcile_document
 from rapp_base.state import head_for_events, replay
@@ -61,7 +61,7 @@ def _issue(number: int, command: dict[str, Any] | str) -> dict[str, Any]:
     timestamp = instant.strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
         "author_association": "OWNER",
-        "body": f"### Command\n\n```json\n{text}\n```",
+        "body": render_issue_form_body(text),
         "created_at": timestamp,
         "id": 8_000_000_000 + number,
         "labels": [],

@@ -8,7 +8,7 @@ from rapp_base.build import build
 from rapp_base.errors import RappError
 from rapp_base.jsonutil import canonical_bytes
 from rapp_base.manifest import load_manifest
-from rapp_base.reconcile import load_receipts
+from rapp_base.reconcile import load_receipts, load_requests
 from rapp_base.state import deterministic_record_id, replay
 
 from helpers import (
@@ -24,6 +24,32 @@ from helpers import (
 
 
 class EngineTests(unittest.TestCase):
+    def test_programmatic_raw_json_body_remains_accepted(self):
+        with repository() as root:
+            submitted = issue(1, create_command(1), fenced=False)
+            reconcile(root, [submitted])
+            self.assertEqual(load_receipt(root, submitted)["status"], "applied")
+
+    def test_committed_v1_sdk_body_shape_remains_accepted(self):
+        with repository() as root:
+            command = create_command(2)
+            text = json.dumps(command, ensure_ascii=False, indent=2)
+            submitted = issue(2, command, fenced=False)
+            submitted["body"] = f"### Command\n\n```json\n{text}\n```"
+            reconcile(root, [submitted])
+            self.assertEqual(load_receipt(root, submitted)["status"], "applied")
+
+    def test_existing_immutable_v1_requests_still_replay(self):
+        manifest = load_manifest(PROJECT_ROOT)
+        requests = load_requests(PROJECT_ROOT, manifest)
+        self.assertEqual(len(requests), 3)
+        self.assertTrue(
+            all(isinstance(request["command_text"], str) for request in requests.values())
+        )
+        summary = build(PROJECT_ROOT, manifest, write=False)
+        self.assertEqual(summary["requests"], 3)
+        self.assertEqual(summary["events"], 3)
+
     def test_deterministic_create_ids_are_stable_and_identity_bound(self):
         values = {
             "repository_id": 1,

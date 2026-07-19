@@ -18,6 +18,10 @@ Read transport: CORS-open JSON from `raw.githubusercontent.com` or the optional
 Pages explorer. Write transport: one strict command in a public GitHub Issue.
 Never submit secrets or personal/private data. Deletion publishes a tombstone;
 Git and Issue history remain public.
+The Issue Form requires a publication attestation; submitting raw JSON or the
+exact legacy v1.0 SDK wrapper programmatically constitutes the same assertion.
+The legacy wrapper is not an Issue Form path. This is an assertion, not proof
+or moderation.
 
 Status `healthy` means repository-integrity checks passed; GitHub, Actions, and
 Pages availability are not measured. Collection capacity distinguishes active

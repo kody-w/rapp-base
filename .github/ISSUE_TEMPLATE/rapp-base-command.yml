@@ -19,3 +19,10 @@ body:
       render: json
     validations:
       required: true
+  - type: checkboxes
+    id: publication_attestation
+    attributes:
+      label: Publication attestation
+      options:
+        - label: I attest that I have all rights needed to publish this content, that it contains no secrets, private data, or personal data, and that I understand GitHub Issue, Git, version, and tombstone history is public and normal deletion is not erasure.
+          required: true

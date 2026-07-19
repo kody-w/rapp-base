@@ -38,7 +38,10 @@ six hours. A manually closed Issue not yet admitted may be skipped. Terminal
 state is in Git, so successfully delivered closed Issues need not remain in
 the queue.
 
-The body is either one object or exactly:
+Exactly three body shapes are accepted:
+
+1. one raw JSON object submitted programmatically;
+2. the legacy v1.0 SDK programmatic wrapper, with no trailing text:
 
     ### Command
 
@@ -46,7 +49,25 @@ The body is either one object or exactly:
     { one object }
     ```
 
-No extra Markdown, fence, JSON candidate, or trailing text is accepted.
+3. the current Issue Form body:
+
+    ### Command
+
+    ```json
+    { one object }
+    ```
+
+    ### Publication attestation
+
+    - [X] I attest that I have all rights needed to publish this content, that it contains no secrets, private data, or personal data, and that I understand GitHub Issue, Git, version, and tombstone history is public and normal deletion is not erasure.
+
+The checked marker may use `[x]` or `[X]`. An unchecked or changed statement,
+duplicate attestation, extra section, extra Markdown, additional fence/JSON
+candidate, or trailing text is not accepted. The legacy wrapper is retained
+for SDK compatibility as a programmatic submission and is not an Issue Form
+path. Submitting either programmatic shape constitutes the same publication
+assertion as checking the current form. The assertion neither proves
+publication rights nor establishes that the content is suitable.
 Malformed official requests still receive immutable request envelopes and
 terminal rejections.
 
@@ -194,6 +215,14 @@ Pages artifact, and runs repository invariants without changing generated
 state. Repository and Pages inputs reject every symlink, including broken or
 root-escaping links. CI exercises deterministic Python behavior on 3.12, 3.13,
 and 3.14; Node/Pages checks run once.
+Manual Pages runs and successful main-push CI runs deploy current `main`.
+After a successful processor run, Pages compares checked-out `main` with that
+run's starting SHA. Equality is a successful no-op that skips setup, checks,
+artifact upload, and deployment; a difference deploys current `main` after
+the complete `make check` gate. The decision job has no deployment
+concurrency. Only needed deploy jobs join the cancellable `pages-deploy` group,
+so a later no-op cannot replace a needed deployment while a newer needed
+deployment may supersede an older one.
 
 The processor recomputes from refreshed `origin/main`, builds, checks, commits,
 and fast-forwards state. Before commit it runs

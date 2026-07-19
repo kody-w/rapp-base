@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from rapp_base.jsonutil import canonical_bytes
+from rapp_base.jsonutil import canonical_bytes, render_issue_form_body
 from rapp_base.manifest import load_manifest
 from rapp_base.reconcile import reconcile_document
 from rapp_base.state import head_for_events
@@ -95,7 +95,7 @@ def issue(
         else json.dumps(command, ensure_ascii=False, separators=(",", ":"))
     )
     if fenced:
-        body = f"### Command\n\n```json\n{text}\n```"
+        body = render_issue_form_body(text)
     else:
         body = text
     timestamp = datetime(2026, 7, 18, 19, 0, tzinfo=timezone.utc) + timedelta(

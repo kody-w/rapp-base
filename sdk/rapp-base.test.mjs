@@ -5,6 +5,10 @@ import { RappBase, RappBaseError } from "./rapp-base.js";
 
 const revision = "a".repeat(64);
 const timestamp = "2026-07-18T19:00:00Z";
+const publicationAttestation =
+  "I attest that I have all rights needed to publish this content, that it contains no secrets, private data, or personal data, and that I understand GitHub Issue, Git, version, and tombstone history is public and normal deletion is not erasure.";
+const attestationSuffix =
+  `\n\n### Publication attestation\n\n- [X] ${publicationAttestation}`;
 const registryLimits = {
   issue_body_bytes: 32768,
   command_bytes: 16384,
@@ -154,7 +158,10 @@ test("prepares strict create, update, and delete drafts", () => {
   );
   assert.equal(create.command.operation, "create");
   assert.match(create.issueUrl, /template=rapp-base-command\.yml/);
-  assert.match(create.issueBody, /^### Command\n\n```json\n/);
+  assert.equal(
+    create.issueBody,
+    `### Command\n\n\`\`\`json\n${create.json}\n\`\`\`${attestationSuffix}`,
+  );
   const update = collection.prepareUpdate(
     "one",
     revision,
@@ -277,6 +284,7 @@ test("REST submission relies on the fixed title and body, not labels", async () 
   const body = JSON.parse(request.init.body);
   assert.match(body.title, /^\[RAPP Base\]/);
   assert.match(body.body, /^### Command\n\n```json\n/);
+  assert.ok(body.body.endsWith(attestationSuffix));
   assert.equal("labels" in body, false);
   await assert.rejects(
     () => client.submitCommand(
@@ -287,7 +295,68 @@ test("REST submission relies on the fixed title and body, not labels", async () 
   );
 });
 
-test("long commands return a template-only URL and raw field JSON", () => {
+test("prepared validation accepts the committed v1 SDK body shape", async () => {
+  const client = new RappBase({
+    baseUrl: "https://example.test/",
+    repository: "owner/repo",
+    fetch: async () => response(500, {}),
+  });
+  const draft = client.collection("resources").prepareCreate(
+    { title: "Example" },
+    { commandId: "123e4567-e89b-42d3-a456-426614174012" },
+  );
+  const legacyIssueBody = `### Command\n\n\`\`\`json\n${draft.json}\n\`\`\``;
+  let submittedBody;
+  await assert.doesNotReject(() =>
+    client.submitCommand(
+      { ...draft, issueBody: legacyIssueBody },
+      {
+        adapter: async ({ body }) => {
+          submittedBody = body;
+          return { number: 13 };
+        },
+      },
+    )
+  );
+  assert.equal(submittedBody, legacyIssueBody);
+});
+
+test("prepared validation requires an exact checked attestation suffix", async () => {
+  const client = new RappBase({
+    baseUrl: "https://example.test/",
+    repository: "owner/repo",
+    fetch: async () => response(500, {}),
+  });
+  const draft = client.collection("resources").prepareCreate(
+    { title: "Example" },
+    { commandId: "123e4567-e89b-42d3-a456-426614174013" },
+  );
+  const legacyIssueBody = `### Command\n\n\`\`\`json\n${draft.json}\n\`\`\``;
+  await assert.doesNotReject(() =>
+    client.submitCommand(
+      { ...draft, issueBody: draft.issueBody.replace("- [X] ", "- [x] ") },
+      { adapter: async () => ({ number: 13 }) },
+    )
+  );
+  const invalidBodies = [
+    draft.issueBody.replace("- [X] ", "- [ ] "),
+    draft.issueBody.replace("all rights needed", "permission"),
+    `${draft.issueBody}\n\n${attestationSuffix.slice(2)}`,
+    `${draft.issueBody}\n\n### Unexpected section\n\nextra`,
+    `${legacyIssueBody}\ntrailing text`,
+  ];
+  for (const issueBody of invalidBodies) {
+    await assert.rejects(
+      () => client.submitCommand(
+        { ...draft, issueBody },
+        { adapter: async () => ({ number: 14 }) },
+      ),
+      (error) => error instanceof RappBaseError && error.code === "invalid_command",
+    );
+  }
+});
+
+test("long command copy fallback keeps raw field JSON and an attested body", () => {
   const client = new RappBase({
     baseUrl: "https://example.test/",
     repository: "owner/repo",
@@ -303,7 +372,7 @@ test("long commands return a template-only URL and raw field JSON", () => {
   assert.deepEqual(JSON.parse(draft.json), draft.command);
   assert.equal(
     draft.issueBody,
-    `### Command\n\n\`\`\`json\n${draft.json}\n\`\`\``,
+    `### Command\n\n\`\`\`json\n${draft.json}\n\`\`\`${attestationSuffix}`,
   );
   assert.doesNotMatch(draft.json, /^### Command/);
   assert.ok(draft.issueUrl.length < 500);

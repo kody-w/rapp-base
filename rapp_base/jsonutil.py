@@ -13,10 +13,23 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
+from .constants import PUBLICATION_ATTESTATION, PUBLICATION_ATTESTATION_HEADING
 from .errors import RappError
 
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-_FORM_RE = re.compile(r"\A### Command\r?\n\r?\n(?P<command>.*)\Z", re.DOTALL)
+_COMMAND_WRAPPER_PATTERN = r"### Command\n\n```json\n(?P<command>.*?)\n```"
+_LEGACY_SDK_FORM_RE = re.compile(
+    rf"\A{_COMMAND_WRAPPER_PATTERN}\Z",
+    re.DOTALL,
+)
+_ISSUE_FORM_RE = re.compile(
+    (
+        rf"\A{_COMMAND_WRAPPER_PATTERN}\n\n"
+        rf"### {re.escape(PUBLICATION_ATTESTATION_HEADING)}\n\n"
+        rf"- \[[xX]\] {re.escape(PUBLICATION_ATTESTATION)}\Z"
+    ),
+    re.DOTALL,
+)
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 JS_SAFE_INTEGER = 9_007_199_254_740_991
 
@@ -272,22 +285,31 @@ def extract_command_candidate(body: str, limits: dict[str, int]) -> str:
     if stripped.startswith("{"):
         candidate = stripped
     else:
-        match = _FORM_RE.fullmatch(body.strip())
+        match = _ISSUE_FORM_RE.fullmatch(stripped)
+        if match is None:
+            match = _LEGACY_SDK_FORM_RE.fullmatch(stripped)
         if match is None:
             raise RappError(
                 "invalid_issue_form",
-                "body must contain only the Issue Form Command field",
+                "body must be raw JSON, the legacy SDK wrapper, "
+                "or the exact Issue Form fields",
             )
         candidate = match.group("command").strip()
+        if "```" in candidate:
+            raise RappError("invalid_issue_form", "exactly one JSON block is required")
     if not candidate:
         raise RappError("empty_command", "command is required")
-    if candidate.startswith("```json\n") and candidate.endswith("\n```"):
-        if candidate.count("```") != 2:
-            raise RappError("invalid_issue_form", "exactly one JSON block is required")
-        candidate = candidate[len("```json\n") : -len("\n```")].strip()
-    elif "```" in candidate:
+    if "```" in candidate:
         raise RappError("invalid_issue_form", "Markdown code fences are not accepted")
     return candidate
+
+
+def render_issue_form_body(command_text: str) -> str:
+    return (
+        f"### Command\n\n```json\n{command_text}\n```\n\n"
+        f"### {PUBLICATION_ATTESTATION_HEADING}\n\n"
+        f"- [X] {PUBLICATION_ATTESTATION}"
+    )
 
 
 def extract_command_text(body: str, limits: dict[str, int]) -> str:

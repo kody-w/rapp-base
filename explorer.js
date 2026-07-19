@@ -230,12 +230,12 @@ function prepareCommand(event) {
     elements["command-preview"].textContent = prepared.json;
     elements["issue-link"].href = prepared.issueUrl;
     elements["issue-link"].textContent = prepared.requiresCopy
-      ? "Open form, then paste JSON"
+      ? "Open form, paste JSON, then attest"
       : "Open prefilled Issue";
     elements["issue-link"].hidden = false;
     if (prepared.requiresCopy) {
       elements["compose-error"].textContent =
-        "The command is too long for a safe prefilled URL. Copy the JSON above into the Command field.";
+        "The command is too long for a safe prefilled URL. Copy the JSON above into the Command field, then check the required publication attestation.";
     }
     elements["receipt-command-id"].value = prepared.command.command_id;
   } catch (error) {

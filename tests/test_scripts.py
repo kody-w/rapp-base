@@ -18,6 +18,7 @@ from rapp_base.errors import RappError
 from rapp_base.jsonutil import canonical_bytes
 from rapp_base.write_control import CONTROL_PATH, control_document_bytes
 from scripts.check import check as check_repository, check_control_document
+from scripts.pages_deployment import decide_pages_deployment
 from scripts.prepare_pages import DIRECTORIES, FILES, prepare
 
 
@@ -192,6 +193,166 @@ class ScriptFixtureTests(unittest.TestCase):
         self.assertIn('["pull_request"]["base"]["sha"]', workflow)
         self.assertIn("fetch-depth: 0", workflow)
         self.assertNotIn("cancel-in-progress:", workflow)
+
+    def test_pages_deployment_decision_handles_manual_ci_and_processor_runs(self):
+        before = "a" * 40
+        current = "b" * 40
+        manual = decide_pages_deployment(
+            event_name="workflow_dispatch",
+            current_sha=current,
+        )
+        ci = decide_pages_deployment(
+            event_name="workflow_run",
+            current_sha=current,
+            workflow_name="Read-only CI",
+            workflow_event="push",
+            workflow_conclusion="success",
+            workflow_head_sha=before,
+        )
+        no_commit = decide_pages_deployment(
+            event_name="workflow_run",
+            current_sha=before,
+            workflow_name="Process RAPP Base requests",
+            workflow_event="schedule",
+            workflow_conclusion="success",
+            workflow_head_sha=before,
+        )
+        changed = decide_pages_deployment(
+            event_name="workflow_run",
+            current_sha=current,
+            workflow_name="Process RAPP Base requests",
+            workflow_event="issues",
+            workflow_conclusion="success",
+            workflow_head_sha=before,
+        )
+        self.assertTrue(manual.deploy)
+        self.assertEqual(manual.reason, "manual_dispatch")
+        self.assertTrue(ci.deploy)
+        self.assertEqual(ci.reason, "successful_ci_push")
+        self.assertFalse(no_commit.deploy)
+        self.assertEqual(no_commit.reason, "processor_no_commit")
+        self.assertTrue(changed.deploy)
+        self.assertEqual(changed.reason, "processor_changed_main")
+        no_op_cli = subprocess.run(
+            [
+                sys.executable,
+                "scripts/pages_deployment.py",
+                "--event-name",
+                "workflow_run",
+                "--current-sha",
+                before,
+                "--workflow-name",
+                "Process RAPP Base requests",
+                "--workflow-conclusion",
+                "success",
+                "--workflow-head-sha",
+                before,
+            ],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(no_op_cli.returncode, 0, no_op_cli.stderr)
+        self.assertIn("deploy=false\n", no_op_cli.stdout)
+        self.assertIn("reason=processor_no_commit\n", no_op_cli.stdout)
+
+    def test_later_processor_noop_does_not_replace_historical_needed_deploy(self):
+        before = "a" * 40
+        current = "b" * 40
+        historical_needed = decide_pages_deployment(
+            event_name="workflow_run",
+            current_sha=current,
+            workflow_name="Process RAPP Base requests",
+            workflow_event="issues",
+            workflow_conclusion="success",
+            workflow_head_sha=before,
+        )
+        later_noop = decide_pages_deployment(
+            event_name="workflow_run",
+            current_sha=current,
+            workflow_name="Process RAPP Base requests",
+            workflow_event="schedule",
+            workflow_conclusion="success",
+            workflow_head_sha=current,
+        )
+        self.assertTrue(historical_needed.deploy)
+        self.assertEqual(historical_needed.reason, "processor_changed_main")
+        self.assertFalse(later_noop.deploy)
+        self.assertEqual(later_noop.reason, "processor_no_commit")
+
+    def test_pages_workflow_isolates_decision_from_deploy_concurrency(self):
+        workflow = (PROJECT_ROOT / ".github/workflows/pages.yml").read_text(
+            encoding="utf-8"
+        )
+        decision_start = workflow.index("  decision:\n")
+        deploy_start = workflow.index("  deploy:\n")
+        preamble = workflow[:decision_start]
+        decision = workflow[decision_start:deploy_start]
+        deploy = workflow[deploy_start:]
+
+        self.assertNotIn("concurrency:", preamble)
+        self.assertNotIn("concurrency:", decision)
+        self.assertEqual(workflow.count("concurrency:"), 1)
+        self.assertIn(
+            "    concurrency:\n"
+            "      group: pages\n"
+            "      cancel-in-progress: true",
+            deploy,
+        )
+        self.assertIn("    needs: decision\n", deploy)
+        self.assertIn(
+            "    if: ${{ needs.decision.outputs.deploy == 'true' }}\n",
+            deploy,
+        )
+        self.assertIn(
+            "      deploy: ${{ steps.deployment-decision.outputs.deploy }}",
+            decision,
+        )
+
+        decision_steps = (
+            "- name: Check out current main for decision",
+            "- name: Determine deployment need",
+        )
+        decision_positions = [decision.index(step) for step in decision_steps]
+        self.assertEqual(decision_positions, sorted(decision_positions))
+        self.assertNotIn("- name: Set up Python", decision)
+        decision_block = decision[decision_positions[1] :]
+        decision_run = decision_block.split("run: |", 1)[1]
+        self.assertNotIn("${{", decision_run)
+        self.assertIn(
+            "WORKFLOW_RUN_HEAD_SHA: "
+            "${{ github.event.workflow_run.head_sha || '' }}",
+            decision_block,
+        )
+        self.assertIn("--current-sha \"$(git rev-parse HEAD)\"", decision_run)
+        self.assertIn(
+            '--workflow-head-sha "${WORKFLOW_RUN_HEAD_SHA}"',
+            decision_run,
+        )
+        self.assertIn("GITHUB_STEP_SUMMARY", decision_run)
+
+        deploy_steps = (
+            "- name: Check out current main for deployment",
+            "- name: Set up Python",
+            "- name: Verify and prepare",
+            "- name: Configure Pages",
+            "- name: Upload Pages artifact",
+            "- name: Deploy Pages",
+        )
+        deploy_positions = [deploy.index(step) for step in deploy_steps]
+        self.assertEqual(deploy_positions, sorted(deploy_positions))
+        verify = deploy[deploy_positions[2] : deploy_positions[3]]
+        self.assertIn("ref: main", deploy[: deploy_positions[1]])
+        self.assertIn("make check", verify)
+        self.assertIn("python3 scripts/prepare_pages.py --output .pages", verify)
+
+        self.assertNotIn("pages:", preamble + decision)
+        self.assertNotIn("id-token:", preamble + decision)
+        self.assertEqual(workflow.count("pages: write"), 1)
+        self.assertEqual(workflow.count("id-token: write"), 1)
+        self.assertIn("pages: write", deploy)
+        self.assertIn("id-token: write", deploy)
 
     def test_repository_check_rejects_even_an_escaping_symlink(self):
         if not hasattr(os, "symlink"):
