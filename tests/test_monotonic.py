@@ -11,6 +11,7 @@ from pathlib import Path
 
 from helpers import PROJECT_ROOT
 from rapp_base.jsonutil import canonical_bytes
+from rapp_base.write_control import CONTROL_PATH, control_document_bytes
 from scripts.check_monotonic import MonotonicError, _blobs, check_monotonic
 
 
@@ -33,6 +34,7 @@ def git_repository():
     version = canonical_bytes({"schema": "version/1.0", "value": 1})
     version_hash = hashlib.sha256(version).hexdigest()
     files = {
+        CONTROL_PATH: control_document_bytes(True),
         "state/events/00000001-base.json": canonical_bytes({"event": 1}),
         "state/requests/issue-1.json": canonical_bytes({"request": 1}),
         "state/receipts/issue-1.json": canonical_bytes({"receipt": 1}),
@@ -82,6 +84,24 @@ def git_repository():
 
 
 class MonotonicHistoryTests(unittest.TestCase):
+    def test_control_change_is_permitted_without_mutating_canonical_state(self):
+        with git_repository() as root:
+            protected = {
+                relative: (root / relative).read_bytes()
+                for relative in (
+                    "state/events/00000001-base.json",
+                    "state/requests/issue-1.json",
+                    "state/receipts/issue-1.json",
+                    "state/head.json",
+                    "versions/index.json",
+                )
+            }
+            (root / CONTROL_PATH).write_bytes(control_document_bytes(False))
+            summary = check_monotonic(root, "HEAD")
+            self.assertEqual(summary["current_sequence"], 1)
+            for relative, raw in protected.items():
+                self.assertEqual((root / relative).read_bytes(), raw)
+
     def test_large_blob_batch_is_drained_without_pipe_deadlock(self):
         with git_repository() as root:
             object_id = subprocess.run(

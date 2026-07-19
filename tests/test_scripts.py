@@ -16,11 +16,30 @@ from helpers import (
 )
 from rapp_base.errors import RappError
 from rapp_base.jsonutil import canonical_bytes
-from scripts.check import check as check_repository
+from rapp_base.write_control import CONTROL_PATH, control_document_bytes
+from scripts.check import check as check_repository, check_control_document
 from scripts.prepare_pages import DIRECTORIES, FILES, prepare
 
 
 class ScriptFixtureTests(unittest.TestCase):
+    def test_repository_check_validates_optional_control_document(self):
+        with repository() as root:
+            check_control_document(root)
+            path = root / CONTROL_PATH
+            path.parent.mkdir(parents=True)
+            path.write_bytes(control_document_bytes(True))
+            check_control_document(root)
+            path.write_text(
+                '{"enabled":"true","schema":"rapp-base-write-control/1.0"}\n',
+                encoding="utf-8",
+            )
+            with self.assertRaises(RappError) as raised:
+                check_control_document(root)
+            self.assertEqual(
+                raised.exception.code,
+                "invalid_write_control",
+            )
+
     def test_fixture_runs_through_local_reconcile_and_build_commands(self):
         environment = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
         with repository() as root:

@@ -8,7 +8,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 import uuid
 from contextlib import contextmanager
@@ -19,6 +18,7 @@ from rapp_base.build import build
 from rapp_base.jsonutil import canonical_bytes
 from rapp_base.manifest import load_manifest
 from rapp_base.state import head_for_events
+from rapp_base.write_control import CONTROL_PATH, control_document_bytes
 
 TARGET_OWNER = "example-owner"
 TARGET_REPOSITORY = "example-data"
@@ -46,7 +46,10 @@ def _copy_ignore(_directory, names):
 
 @contextmanager
 def full_zero_state_repository():
-    scratch_root = Path(tempfile.mkdtemp(prefix="rapp-base-bootstrap-"))
+    scratch_parent = PROJECT_ROOT / ".test-work"
+    scratch_parent.mkdir(parents=True, exist_ok=True)
+    scratch_root = scratch_parent / f"rapp-base-bootstrap-{uuid.uuid4().hex}"
+    scratch_root.mkdir()
     root = scratch_root / f"copy-{uuid.uuid4().hex}"
     try:
         shutil.copytree(PROJECT_ROOT, root, ignore=_copy_ignore)
@@ -67,13 +70,21 @@ def full_zero_state_repository():
     finally:
         shutil.rmtree(root, ignore_errors=True)
         shutil.rmtree(scratch_root, ignore_errors=True)
+        try:
+            scratch_parent.rmdir()
+        except OSError:
+            pass
 
 
-def _run(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+def _run(
+    root: Path,
+    *arguments: str,
+    environment: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, *arguments],
         cwd=root,
-        env=ENVIRONMENT,
+        env=ENVIRONMENT if environment is None else environment,
         check=False,
         capture_output=True,
         text=True,
@@ -85,7 +96,14 @@ def _run_bootstrap(
     *,
     owner: str = TARGET_OWNER,
     repository: str = TARGET_REPOSITORY,
+    expose_parent_worktree: bool = False,
 ) -> subprocess.CompletedProcess[str]:
+    environment = ENVIRONMENT
+    if not expose_parent_worktree:
+        environment = {
+            **ENVIRONMENT,
+            "GIT_CEILING_DIRECTORIES": str(root.parent),
+        }
     return _run(
         root,
         "scripts/bootstrap.py",
@@ -93,6 +111,7 @@ def _run_bootstrap(
         str(root),
         f"--owner={owner}",
         f"--repo={repository}",
+        environment=environment,
     )
 
 
@@ -144,6 +163,36 @@ def _old_reference_paths(root: Path, owner: str, repository: str) -> list[str]:
 
 
 class BootstrapTests(unittest.TestCase):
+    def test_clean_template_control_is_reset_true_without_identity_rewrite(self):
+        for initial in ("false", "missing"):
+            with self.subTest(initial=initial), full_zero_state_repository() as root:
+                path = root / CONTROL_PATH
+                if initial == "false":
+                    path.write_bytes(control_document_bytes(False))
+                else:
+                    path.unlink()
+                result = _run_bootstrap(root)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(path.read_bytes(), control_document_bytes(True))
+                self.assertEqual(
+                    set(json.loads(path.read_text(encoding="utf-8"))),
+                    {"enabled", "schema"},
+                )
+
+    def test_refuses_malformed_template_control_without_mutation(self):
+        with full_zero_state_repository() as root:
+            path = root / CONTROL_PATH
+            path.write_text(
+                '{"enabled":true,"schema":"rapp-base-write-control/1.0",'
+                f'"repository":"{"kody-w"}/{"rapp-base"}"}}\n',
+                encoding="utf-8",
+            )
+            before = _tree_snapshot(root)
+            result = _run_bootstrap(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("invalid_write_control", result.stderr)
+            self.assertEqual(_tree_snapshot(root), before)
+
     def test_full_zero_state_copy_becomes_a_coherent_deployment(self):
         with full_zero_state_repository() as root:
             before_manifest = json.loads(
@@ -398,7 +447,10 @@ class BootstrapTests(unittest.TestCase):
                 canonical_bytes(head_for_events(manifest, []))
             )
             build(nested_root, manifest)
-            result = _run_bootstrap(nested_root)
+            result = _run_bootstrap(
+                nested_root,
+                expose_parent_worktree=True,
+            )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("nested inside another Git worktree", result.stderr)
         finally:

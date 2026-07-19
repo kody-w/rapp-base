@@ -32,6 +32,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Reconcile, validate, and push
+        id: reconcile
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -44,6 +45,16 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           success=0
           for attempt in 1 2 3; do
+            gate_status=0
+            python3 scripts/write_control.py check || gate_status=$?
+            if [[ "${gate_status}" -eq 3 ]]; then
+              echo "Writes are paused; reconciliation and push were skipped."
+              echo "writes_enabled=false" >> "${GITHUB_OUTPUT}"
+              exit 0
+            elif [[ "${gate_status}" -ne 0 ]]; then
+              echo "Write gate is uncertain; reconciliation and push are blocked." >&2
+              exit "${gate_status}"
+            fi
             echo "Reconciliation attempt ${attempt}/3"
             git fetch --no-tags origin main
             git reset --hard origin/main
@@ -66,9 +77,22 @@ jobs:
               break
             fi
             git commit -m "chore(state): reconcile public issue commands"
-            if git push origin HEAD:main; then
-              success=1
-              break
+            if python3 scripts/write_control.py check; then
+              if git push origin HEAD:main; then
+                success=1
+                break
+              fi
+            else
+              gate_status=$?
+              if [[ "${gate_status}" -eq 3 ]]; then
+                echo "Writes became paused before push; no state was published."
+                git reset --hard origin/main
+                git clean -fd -- .work state api versions registry.json
+                echo "writes_enabled=false" >> "${GITHUB_OUTPUT}"
+                exit 0
+              fi
+              echo "Write gate is uncertain; refusing to push." >&2
+              exit "${gate_status}"
             fi
             echo "Push raced; discarding the candidate and recomputing."
           done
@@ -76,11 +100,22 @@ jobs:
           git fetch --no-tags origin main
           git reset --hard origin/main
           git clean -fd -- .work
+          echo "writes_enabled=true" >> "${GITHUB_OUTPUT}"
       - name: Deliver committed receipts
+        if: ${{ steps.reconcile.outputs.writes_enabled == 'true' }}
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PYTHONDONTWRITEBYTECODE: "1"
         run: |
+          gate_status=0
+          python3 scripts/write_control.py check || gate_status=$?
+          if [[ "${gate_status}" -eq 3 ]]; then
+            echo "Writes are paused; receipt delivery was skipped."
+            exit 0
+          elif [[ "${gate_status}" -ne 0 ]]; then
+            echo "Write gate is uncertain; receipt delivery is blocked." >&2
+            exit "${gate_status}"
+          fi
           python3 scripts/deliver_receipts.py

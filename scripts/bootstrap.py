@@ -29,6 +29,12 @@ from rapp_base.jsonutil import (
 )
 from rapp_base.manifest import load_manifest
 from rapp_base.state import head_for_events
+from rapp_base.write_control import (
+    CONTROL_PATH,
+    WriteControlError,
+    control_document_bytes,
+    validate_control_file,
+)
 
 _OWNER_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
 _REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
@@ -438,7 +444,10 @@ def _prepare_rewrites(
     rewrites: dict[Path, bytes] = {root / "manifest.json": manifest_data}
     for path in _tracked_or_exported_files(root):
         relative = path.relative_to(root)
-        if relative.as_posix() == "manifest.json" or _is_generated(relative):
+        if (
+            relative.as_posix() in {"manifest.json", CONTROL_PATH}
+            or _is_generated(relative)
+        ):
             continue
         if not _is_searchable(path):
             continue
@@ -464,6 +473,13 @@ def _prepare_rewrites(
             )
         rewrites[path] = updated.encode("utf-8")
     return rewrites, updated_manifest, forms
+
+
+def _validate_template_control(root: Path) -> None:
+    try:
+        validate_control_file(root, require_canonical=False)
+    except WriteControlError as exc:
+        raise RappError("invalid_write_control", str(exc)) from exc
 
 
 def _validate_generated_paths(root: Path) -> None:
@@ -516,6 +532,7 @@ def bootstrap(root: Path, owner: str, repository: str) -> dict[str, Any]:
     _require_clean_checkout(root)
     _validate_zero_state(root)
     manifest = load_manifest(root)
+    _validate_template_control(root)
     old_full_name = (
         f"{manifest['repository']['owner']}/{manifest['repository']['name']}"
     )
@@ -538,6 +555,10 @@ def bootstrap(root: Path, owner: str, repository: str) -> dict[str, Any]:
         key=lambda item: item[0].relative_to(root).as_posix(),
     ):
         write_bytes_atomic(path, data)
+    write_bytes_atomic(
+        root / CONTROL_PATH,
+        control_document_bytes(True),
+    )
 
     _remove_generated(root)
     write_json_atomic(

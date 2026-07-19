@@ -169,7 +169,9 @@ contain no JSON files.
    The command refuses admitted state, symlinks, unsafe GitHub names, and a
    dirty or staged checkout. It never rewrites `.git`, removes only generated
    `api/`, `versions/`, and `registry.json`, re-anchors the zero-state head,
-   and deterministically rebuilds the deployment.
+   resets `.rapp-base/write-control.json` to canonical `enabled: true` without
+   adding deployment identity to it, and deterministically rebuilds the
+   deployment.
 2. Review `manifest.json`, then customize collections, fields, seeds,
    policies, limits, and explicit semantic `generated_at` only while the
    deployment still has zero requests, receipts, and events. Re-run the
@@ -234,6 +236,65 @@ state/version-index entries.
 history and projections are internally consistent. It does not measure GitHub
 API, Actions, raw-CDN, or Pages availability; those are explicitly reported as
 `not_measured`.
+
+The read-only `Operational canary` runs at minute 43 every six hours and can
+also be dispatched manually. It independently checks the canonical Contents
+API registry, cache-busted raw and Pages registries, open command age,
+`process.yml` recency/outcome, and the GitHub Pages API:
+
+```sh
+GITHUB_TOKEN="$(gh auth token)" \
+  GITHUB_REPOSITORY="kody-w/rapp-base" \
+  python3.14 scripts/check_live.py
+gh workflow run operations.yml --repo kody-w/rapp-base
+```
+
+The defaults come from `manifest.json`; use `--repository`, `--raw-base`, or
+`--pages-base` only for the matching GitHub-hosted deployment. Command backlog
+age defaults to 30 minutes and successful processor age to 12 hours.
+`--allow-no-process-run` applies only to an unactivated clean template with no
+published requests/events/receipts and no queued command Issues.
+
+Pause mutation processing, without changing public read availability, with the
+guarded operator command:
+
+```sh
+GITHUB_TOKEN="$(gh auth token)" \
+  GITHUB_REPOSITORY="kody-w/rapp-base" \
+  python3 scripts/write_control.py pause \
+  --confirm-repository kody-w/rapp-base
+```
+
+The command atomically creates or updates
+`.rapp-base/write-control.json` on `main` to `enabled: false` through the
+Contents API using the current blob SHA, retries bounded update races, then
+cancels every queued or in-progress `process.yml` run and polls until none
+remain. It reports `pause complete` only after the committed document reads
+false and the active-run list is empty. The token needs Contents write plus
+Actions read/cancel access. Resume with:
+
+```sh
+GITHUB_TOKEN="$(gh auth token)" \
+  GITHUB_REPOSITORY="kody-w/rapp-base" \
+  python3 scripts/write_control.py resume \
+  --confirm-repository kody-w/rapp-base
+```
+
+Resume commits and confirms `enabled: true`, preserving the control-file
+history. The committed control document is the sole write authority. The
+processor reads it from the Contents API at `main` before reconciliation and
+immediately before every push. A paused workflow may be queued and begin
+setup, but its first file gate exits before reconciliation. Its strict schema
+is exactly `{"enabled":<boolean>,"schema":"rapp-base-write-control/1.0"}`;
+duplicate keys, extra fields, invalid types, oversized content, unexpected API
+shapes, and API uncertainty fail closed. A missing file alone enables writes
+for upgrade compatibility. Pausing does not disable Issue creation: queued
+command Issues remain public and open, and the canary may report them as stale
+until processing resumes.
+
+This canary is an availability signal, not an SLA or an independent external
+monitor. Because it runs on GitHub Actions and checks GitHub-hosted boundaries,
+it shares provider-level failure modes with the service.
 
 Collection metadata reports active, tombstone, and lifetime record counts plus
 remaining active slots. `records_per_collection` limits active records, so a

@@ -203,6 +203,13 @@ out and rejects a changed genesis, decreased/forked same-sequence head,
 changed/removed prior request/receipt/event, or changed/removed prior version
 index entry. Code/docs-only and append-only state changes pass. Receipt
 delivery is a later, non-blocking step.
+The versioned `.rapp-base/write-control.json` document on `main` is the sole
+write authority. The processor reads it through the Contents API before
+reconciliation and immediately before push; malformed or uncertain reads fail
+closed, while absence enables compatibility with deployments predating the
+document. A paused workflow may start, but its first file gate exits before
+reconciliation. Control-only commits are permitted by the monotonic checker
+and never alter canonical state.
 Before commenting it verifies the exact receipt is reachable on remote main.
 Only the exact expected comment authored by `github-actions[bot]` (or an
 explicit trusted bot login) counts as delivered. Failures are isolated per

@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 from rapp_base.build import build
 from rapp_base.errors import RappError
 from rapp_base.manifest import load_manifest
+from rapp_base.write_control import WriteControlError, validate_control_file
 
 _ACTION_RE = re.compile(r"^\s*uses:\s*[^@\s]+@([0-9a-f]{40})(?:\s+#.*)?$")
 
@@ -59,10 +60,18 @@ def _reject_symlinks(root: Path) -> None:
                 )
 
 
+def check_control_document(root: Path) -> None:
+    try:
+        validate_control_file(root, require_canonical=True)
+    except WriteControlError as exc:
+        raise RappError("invalid_write_control", str(exc)) from exc
+
+
 def check(root: Path) -> None:
     if sys.version_info < (3, 12):
         raise RappError("python_version", "Python 3.12 or newer is required")
     _reject_symlinks(root)
+    check_control_document(root)
     manifest = load_manifest(root)
     repository = manifest["repository"]
     schema_id_base = (

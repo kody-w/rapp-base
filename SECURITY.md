@@ -60,6 +60,52 @@ emergency secret exposure and is outside the normal deletion protocol.
 not an availability or freshness attestation for GitHub REST, Actions, Pages,
 DNS, or raw-content delivery.
 
+## Emergency response
+
+To stop mutation processing during an incident while preserving public reads,
+use the guarded operator command:
+
+```sh
+GITHUB_TOKEN="$(gh auth token)" \
+  GITHUB_REPOSITORY="kody-w/rapp-base" \
+  python3 scripts/write_control.py pause \
+  --confirm-repository kody-w/rapp-base
+```
+
+This atomically commits `.rapp-base/write-control.json` with
+`enabled: false` to `main` using the current blob SHA, cancels all queued or
+in-progress `process.yml` runs, and waits until none remain. It reports `pause
+complete` only after the committed document reads false and the active-run
+list is empty. Contents/API uncertainty fails closed and visibly. The token
+needs Contents write plus Actions read/cancel access.
+
+This does not make submitted data private, disable the Issue form, or close
+queued commands; those Issues remain public and open. Moderate exposed content
+through GitHub, rotate any credential immediately, and follow the
+repository-history rewrite procedure when removal from normal projections is
+insufficient.
+
+After investigating the processor, published generations, and Pages state, run
+the `Operational canary` manually. Resume with:
+
+```sh
+GITHUB_TOKEN="$(gh auth token)" \
+  GITHUB_REPOSITORY="kody-w/rapp-base" \
+  python3 scripts/write_control.py resume \
+  --confirm-repository kody-w/rapp-base
+```
+
+Resume commits and confirms `enabled: true`; it never deletes control history.
+The committed document on `main` is the sole write authority. The processor
+checks it before reconciliation and immediately before push. A paused workflow
+may start, but its first file gate exits before reconciliation. A missing
+document enables writes only for upgrade compatibility; duplicates, unknown
+fields, malformed/oversized content, or uncertain API responses block writes.
+
+The canary measures the hosted boundary but is not an SLA or a provider-
+independent external monitor. A GitHub-wide failure can affect both RAPP Base
+and the GitHub Actions canary.
+
 ## Reporting a vulnerability
 
 Do not place exploit details or secrets in a public Issue or Discussion. Use
