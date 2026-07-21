@@ -58,6 +58,7 @@ _SEARCHABLE_SUFFIXES = frozenset(
     }
 )
 _SEARCHABLE_NAMES = frozenset({"LICENSE", "Makefile", ".gitignore"})
+_SOURCE_ONLY_FILES = frozenset({"CLAUDE.md", "HANDOFF.md"})
 _TOP_LEVEL_ALLOWLIST = frozenset(
     {
         ".gitignore",
@@ -377,7 +378,8 @@ def _is_rewrite_allowlisted(relative: Path) -> bool:
 
 def _is_generated(relative: Path) -> bool:
     return (
-        relative.as_posix() == "registry.json"
+        relative.as_posix() in _SOURCE_ONLY_FILES
+        or relative.as_posix() == "registry.json"
         or (
             bool(relative.parts)
             and relative.parts[0] in {"api", "versions"}
@@ -493,6 +495,10 @@ def _validate_generated_paths(root: Path) -> None:
 
 
 def _remove_generated(root: Path) -> None:
+    for name in _SOURCE_ONLY_FILES:
+        path = root / name
+        if path.exists():
+            path.unlink()
     api = root / API_PREFIX
     if api.exists():
         shutil.rmtree(api)

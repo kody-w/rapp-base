@@ -222,6 +222,8 @@ class BootstrapTests(unittest.TestCase):
 
             result = _run_bootstrap(root)
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((root / "CLAUDE.md").exists())
+            self.assertFalse((root / "HANDOFF.md").exists())
             summary = json.loads(result.stdout)
             self.assertEqual(
                 summary["from"], f"{old_owner}/{old_repository}"
