@@ -367,6 +367,36 @@ class BootstrapTests(unittest.TestCase):
                 [],
             )
 
+
+    def test_bootstrap_allows_rapp_member_card_but_not_other_rapp_paths(self):
+        for relative, allowed in (
+            (".rapp/member.md", True),
+            (".rapp/not-member.md", False),
+        ):
+            with self.subTest(relative=relative), full_zero_state_repository() as root:
+                manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+                old_owner = manifest["repository"]["owner"]
+                old_repository = manifest["repository"]["name"]
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(
+                    f"Repository: https://github.com/{old_owner}/{old_repository}\n",
+                    encoding="utf-8",
+                )
+
+                result = _run_bootstrap(root)
+
+                if allowed:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(
+                        f"https://github.com/{TARGET_FULL_NAME}",
+                        target.read_text(encoding="utf-8"),
+                    )
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("rewrite_allowlist", result.stderr)
+                    self.assertIn(relative, result.stderr)
+
     def test_refuses_each_kind_of_admitted_state_without_mutation(self):
         for name in ("requests", "receipts", "events"):
             with self.subTest(state=name), full_zero_state_repository() as root:

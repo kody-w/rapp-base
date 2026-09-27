@@ -76,6 +76,7 @@ _TOP_LEVEL_ALLOWLIST = frozenset(
 _EXACT_REWRITE_PATHS = _TOP_LEVEL_ALLOWLIST | frozenset(
     {
         ".github/ISSUE_TEMPLATE/config.yml",
+        ".rapp/member.md",
         "tests/fixtures/issues.json",
         "tests/helpers.py",
         "tests/test_delivery.py",
