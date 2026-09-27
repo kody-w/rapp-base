@@ -1,5 +1,9 @@
 # RAPP Base
 
+<!-- rapp1:network-header:start -->
+[![RAPP/1](https://kody-w.github.io/rapp-hive-public/portfolio/badges/rapp-base.svg)](https://github.com/kody-w/rapp-hive-public/blob/main/portfolio/repos/rapp-base.md) · **New to RAPP?** [Start here: get your Brainstem →](https://github.com/kody-w/rapp-installer#start-here)
+<!-- rapp1:network-header:end -->
+
 RAPP Base is a public GitHub-Issue CRUD profile over
 `rapp-static-api/1.0`. It publishes deterministic, CORS-readable JSON and
 accepts one strict create, update, or delete command per public GitHub Issue.
